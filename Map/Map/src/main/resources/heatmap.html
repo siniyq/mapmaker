@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Витебск Heatmap</title>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <style>
+        #map { height: 800px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        const map = L.map('map').setView([55.1904, 30.2049], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+        function getColor(intensity) {
+            if (intensity === 0) return '#808080'; // серый для пустых участков
+            // Градиент от красного к зеленому через желтый
+            const r = intensity < 0.5 ? 255 : Math.floor(255 * (1 - intensity) * 2);
+            const g = intensity < 0.5 ? Math.floor(255 * intensity * 2) : 255;
+            return `rgb(${r},${g},0)`;
+        }
+
+        fetch('heatmap_restaurant.geojson')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: function(feature) {
+                        return {
+                            fillColor: getColor(feature.properties.intensity),
+                            weight: 1,
+                            opacity: 1,
+                            color: 'white',
+                            fillOpacity: 0.7
+                        };
+                    }
+                }).addTo(map);
+            });
+    </script>
+</body>
+</html>
