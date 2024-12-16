@@ -1,0 +1,4 @@
+com\mapmaker\DatabaseService.class
+com\mapmaker\GoogleMapsDataCollector.class
+com\mapmaker\Main.class
+com\mapmaker\Location.class
