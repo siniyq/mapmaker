@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Heatmap</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button onclick="showLayer('restaurants')">Рестораны</button>
+        <button onclick="showLayer('bars')">Бары</button>
+        <button onclick="showLayer('cafes')">Кафе</button>
+        <button onclick="showLayer('banks')">Банки</button>
+        <button onclick="showLayer('pharmacy')">Аптеки</button>
+        <button onclick="showLayer('gym')">Спортзалы</button>
+    </div>
+    <script src="/js/heatmap.js"></script>
+</body>
+</html>
