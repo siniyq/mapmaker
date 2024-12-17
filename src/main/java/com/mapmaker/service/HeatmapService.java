@@ -14,4 +14,8 @@ public class HeatmapService {
     public JSONObject generateHeatmapJson(String type) {
         return repository.findAllByType(type);
     }
+
+    public JSONObject generateAllPlacesJson() {
+        return repository.findAll();
+    }
 }

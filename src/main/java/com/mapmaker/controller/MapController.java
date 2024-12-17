@@ -33,4 +33,13 @@ public class MapController {
         
         return heatmapService.generateHeatmapJson(placeType).toString();
     }
+
+    @GetMapping("/heatmap/all")
+    @ResponseBody
+    public String getAllPlaces() {
+        System.out.println("Получен запрос на получение всех мест");
+        String result = heatmapService.generateAllPlacesJson().toString();
+        System.out.println("Отправляем данные: " + result.substring(0, Math.min(100, result.length())));
+        return result;
+    }
 }

@@ -58,4 +58,51 @@ public class PointOfInterestRepository {
         featureCollection.put("features", features);
         return featureCollection;
     }
+
+    public JSONObject findAll() {
+        JSONObject featureCollection = new JSONObject();
+        featureCollection.put("type", "FeatureCollection");
+        JSONArray features = new JSONArray();
+
+        try (Connection conn = DatabaseHelper.getConnection()) {
+            String sql = """
+                SELECT 
+                    name,
+                    type,
+                    ST_Y(location::geometry) as lat,
+                    ST_X(location::geometry) as lng,
+                    COALESCE(rating, 0) as rating
+                FROM points_of_interest
+            """;
+            
+            try (Statement stmt = conn.createStatement();
+                 ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) {
+                    JSONObject feature = new JSONObject();
+                    feature.put("type", "Feature");
+
+                    JSONObject geometry = new JSONObject();
+                    geometry.put("type", "Point");
+                    JSONArray coordinates = new JSONArray();
+                    coordinates.put(rs.getDouble("lng"));
+                    coordinates.put(rs.getDouble("lat"));
+                    geometry.put("coordinates", coordinates);
+
+                    JSONObject properties = new JSONObject();
+                    properties.put("name", rs.getString("name"));
+                    properties.put("type", rs.getString("type"));
+                    properties.put("rating", rs.getDouble("rating"));
+                    
+                    feature.put("geometry", geometry);
+                    feature.put("properties", properties);
+                    features.put(feature);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        featureCollection.put("features", features);
+        return featureCollection;
+    }
 }

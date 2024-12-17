@@ -26,3 +26,15 @@
 .controls button:hover {
     background: #f0f0f0;
 }
+
+.show-all {
+    background-color: #4CAF50 !important;
+    color: white;
+    font-weight: bold;
+    margin-top: 10px !important;
+    border: none !important;
+}
+
+.show-all:hover {
+    background-color: #45a049 !important;
+}
