@@ -79,6 +79,9 @@ public class GoogleMapsService {
             
             System.out.println("Сбор данных о спортзалах...");
             searchPlaces("gym");
+
+            System.out.println("Сбор данных о школах...");
+            searchPlaces("school");
             
             System.out.println("Сбор данных завершен");
             context.shutdown();
@@ -121,6 +124,48 @@ public class GoogleMapsService {
     private void processResults(PlacesSearchResponse response, String type, Set<String> processedPlaceIds) {
         for (PlacesSearchResult place : response.results) {
             if (!processedPlaceIds.contains(place.placeId)) {
+                // Если это школа, проверяем, что это не детский сад
+                if ("school".equals(type)) {
+                    String placeName = place.name != null ? place.name.toLowerCase() : "";
+                    
+                    // Пропускаем места с названиями, содержащими указание на детский сад
+                    if (placeName.contains("детский сад") || 
+                        placeName.contains("ясли") || 
+                        placeName.contains("kindergarten") || 
+                        (placeName.contains("детский") && placeName.contains("сад")) ||
+                        placeName.contains("ясли-сад") ||
+                        placeName.contains("doshkol") ||
+                        placeName.contains("jasli") ||
+                        placeName.contains("sad") && placeName.contains("detsk") ||
+                        placeName.contains("дошкольн")) {
+                        continue;
+                    }
+                    
+                    // Проверим типы места от Google API, если среди них есть daycare или установлен - пропускаем
+                    if (place.types != null) {
+                        boolean isKindergarten = false;
+                        for (String placeType : place.types) {
+                            if (placeType.equals("primary_school") || 
+                                placeType.equals("secondary_school") || 
+                                placeType.equals("high_school")) {
+                                // Это школа, оставляем
+                                break;
+                            }
+                            
+                            if (placeType.equals("kindergarten") || 
+                                placeType.equals("day_care") || 
+                                placeType.equals("preschool") ||
+                                placeType.equals("establishment") && placeName.contains("сад")) {
+                                isKindergarten = true;
+                                break;
+                            }
+                        }
+                        
+                        if (isKindergarten) {
+                            continue;
+                        }
+                    }
+                }
                 savePlaceToDatabase(place, type);
                 processedPlaceIds.add(place.placeId);
             }
@@ -187,6 +232,8 @@ public class GoogleMapsService {
             case "BANK" -> PlaceType.BANK;
             case "PHARMACY" -> PlaceType.PHARMACY;
             case "GYM" -> PlaceType.GYM;
+            case "SCHOOL" -> PlaceType.SCHOOL;
+            case "TEST" -> PlaceType.RESTAURANT; // Используем RESTAURANT как плейсхолдер для TEST
             default -> throw new IllegalArgumentException("Неизвестный тип: " + type);
         };
     }
