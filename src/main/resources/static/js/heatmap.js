@@ -10,9 +10,9 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 // Константы для настройки хитмапа
 const GRID_STEP_SIZE = 500; // размер ячейки для группировки в метрах
 const MIN_POINTS_IN_CELL = 1; // минимальное количество точек в ячейке
-const IDW_RADIUS = 3000; // радиус для IDW интерполяции в метрах
+const IDW_RADIUS = 1500; // радиус для IDW интерполяции в метрах
 const IDW_POWER = 2; // степень в формуле IDW
-const SEARCH_NEARBY_POINTS = 100; // количество ближайших точек для интерполяции
+const SEARCH_NEARBY_POINTS = 50; // количество ближайших точек для интерполяции (уменьшен со 100)
 const TILE_SIZE = 256; // размер тайла в пикселях
 
 // Добавляем панель информации
@@ -224,34 +224,79 @@ function interpolateIDW(lat, lng, points) {
     return valueSum / weightSum;
 }
 
-// Получить цвет по значению рейтинга
+// Получить цвет по значению рейтинга с плавным переходом между уровнями
 function getColorForRating(rating) {
-    // Используем фиксированные уровни цветов как в Example 2 javascript-temperatureMap
-    if (rating >= 4.75) {
-        return '#FF0000'; // Ярко-красный - очень высокий рейтинг
-    } else if (rating >= 4.5) {
-        return '#FF5500'; // Оранжево-красный
-    } else if (rating >= 4.25) {
-        return '#FFA500'; // Оранжевый
-    } else if (rating >= 4.0) {
-        return '#FFCC00'; // Оранжево-желтый
-    } else if (rating >= 3.75) {
-        return '#FFFF00'; // Желтый
-    } else if (rating >= 3.5) {
-        return '#CCFF00'; // Желто-зеленый
-    } else if (rating >= 3.25) {
-        return '#88FF00'; // Светло-зеленый
-    } else if (rating >= 3.0) {
-        return '#00FF00'; // Зеленый
-    } else if (rating >= 2.5) {
-        return '#00FFAA'; // Бирюзовый
-    } else if (rating >= 2.0) {
-        return '#00FFFF'; // Голубой
-    } else if (rating >= 1.5) {
-        return '#00AAFF'; // Светло-синий
-    } else {
-        return '#0000FF'; // Синий - низкий рейтинг
+    // Определяем уровни цветов
+    const levels = [
+        { value: 1.5, color: '#0000FF' }, // Синий - очень низкий рейтинг
+        { value: 2.0, color: '#00AAFF' }, // Светло-синий
+        { value: 2.5, color: '#00FFFF' }, // Голубой
+        { value: 3.0, color: '#00FFAA' }, // Бирюзовый
+        { value: 3.25, color: '#00FF00' }, // Зеленый
+        { value: 3.5, color: '#88FF00' }, // Светло-зеленый
+        { value: 3.75, color: '#CCFF00' }, // Желто-зеленый
+        { value: 4.0, color: '#FFFF00' }, // Желтый
+        { value: 4.25, color: '#FFCC00' }, // Оранжево-желтый
+        { value: 4.5, color: '#FFA500' }, // Оранжевый
+        { value: 4.75, color: '#FF5500' }, // Оранжево-красный
+        { value: 5.0, color: '#FF0000' } // Ярко-красный - очень высокий рейтинг
+    ];
+    
+    // Если рейтинг ниже минимального уровня, возвращаем цвет первого уровня
+    if (rating < levels[0].value) {
+        return levels[0].color;
     }
+    
+    // Если рейтинг выше максимального уровня, возвращаем цвет последнего уровня
+    if (rating >= levels[levels.length - 1].value) {
+        return levels[levels.length - 1].color;
+    }
+    
+    // Находим между какими уровнями находится рейтинг
+    for (let i = 0; i < levels.length - 1; i++) {
+        if (rating >= levels[i].value && rating < levels[i + 1].value) {
+            // Интерполируем цвет между двумя уровнями
+            const lowerLevel = levels[i];
+            const upperLevel = levels[i + 1];
+            
+            // Вычисляем коэффициент для линейной интерполяции
+            const ratio = (rating - lowerLevel.value) / (upperLevel.value - lowerLevel.value);
+            
+            // Преобразуем HEX в RGB для интерполяции
+            const lowerRGB = hexToRgb(lowerLevel.color);
+            const upperRGB = hexToRgb(upperLevel.color);
+            
+            // Линейная интерполяция между цветами
+            const r = Math.round(lowerRGB.r + ratio * (upperRGB.r - lowerRGB.r));
+            const g = Math.round(lowerRGB.g + ratio * (upperRGB.g - lowerRGB.g));
+            const b = Math.round(lowerRGB.b + ratio * (upperRGB.b - lowerRGB.b));
+            
+            // Преобразуем RGB обратно в HEX
+            return rgbToHex(r, g, b);
+        }
+    }
+    
+    // На случай, если что-то пошло не так, возвращаем безопасный цвет
+    return '#FFFF00';
+}
+
+// Вспомогательная функция для преобразования HEX в RGB
+function hexToRgb(hex) {
+    // Убираем символ # если он есть
+    hex = hex.replace(/^#/, '');
+    
+    // Преобразуем HEX в RGB
+    const bigint = parseInt(hex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    
+    return { r, g, b };
+}
+
+// Вспомогательная функция для преобразования RGB в HEX
+function rgbToHex(r, g, b) {
+    return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
 }
 
 // Вычисляем координаты тайла из lat/lng
@@ -393,69 +438,329 @@ function createIDWHeatmap(gridPoints) {
     // Сохраняем точки для использования при клике
     window.currentGridPoints = gridPoints;
     
-    // Определяем границы для расчета
-    let minLat = Number.MAX_VALUE;
-    let maxLat = Number.MIN_VALUE;
-    let minLng = Number.MAX_VALUE;
-    let maxLng = Number.MIN_VALUE;
-    
-    gridPoints.forEach(point => {
-        minLat = Math.min(minLat, point.lat);
-        maxLat = Math.max(maxLat, point.lat);
-        minLng = Math.min(minLng, point.lng);
-        maxLng = Math.max(maxLng, point.lng);
+    // Создаем кастомный канвас-слой
+    const HeatmapLayer = L.GridLayer.extend({
+        // Кэш для тайлов для оптимизации производительности
+        _tileCache: {},
+        _valueCache: {},
+        
+        createTile: function(coords) {
+            // Создаем элемент canvas для тайла
+            const tile = L.DomUtil.create('canvas', 'leaflet-tile');
+            const size = this.getTileSize();
+            tile.width = size.x;
+            tile.height = size.y;
+            const ctx = tile.getContext('2d');
+            
+            // Проверяем есть ли тайл в кэше (по координатам)
+            const cacheKey = `${coords.z}_${coords.x}_${coords.y}`;
+            
+            // Если тайл уже был отрисован и есть в кэше, используем его
+            if (this._tileCache[cacheKey]) {
+                const cachedImageData = this._tileCache[cacheKey];
+                ctx.putImageData(cachedImageData, 0, 0);
+                return tile;
+            }
+            
+            // Получаем географические координаты углов тайла
+            const nwPoint = coords.scaleBy(size);
+            const sePoint = nwPoint.add(size);
+            const nw = this._map.unproject(nwPoint, coords.z);
+            const se = this._map.unproject(sePoint, coords.z);
+            
+            // Отрисовка тепловой карты на канвасе
+            this._drawTile(ctx, tile, size, nw, se, gridPoints, cacheKey, coords.z);
+            
+            return tile;
+        },
+        
+        _drawTile: function(ctx, tile, size, nw, se, points, cacheKey, zoom) {
+            // Адаптируем разрешение в зависимости от зума для повышения производительности
+            const resolution = zoom >= 16 ? 2 : 
+                              zoom >= 14 ? 4 : 
+                              zoom >= 12 ? 6 : 8;
+            
+            // Очищаем тайл
+            ctx.clearRect(0, 0, size.x, size.y);
+            
+            // Создаем временный canvas для расчета интерполяции
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = Math.ceil(size.x / resolution);
+            tempCanvas.height = Math.ceil(size.y / resolution);
+            
+            // Рассчитываем значения на сетке
+            const gridValues = [];
+            for (let y = 0; y < tempCanvas.height; y++) {
+                gridValues[y] = [];
+                for (let x = 0; x < tempCanvas.width; x++) {
+                    const pixelX = x * resolution;
+                    const pixelY = y * resolution;
+                    
+                    // Преобразуем координаты пикселя в географические
+                    const latLng = this._getLatLngFromPixel(pixelX, pixelY, nw, se, size);
+                    
+                    // Используем кэш для ускорения вычислений
+                    const valueCacheKey = `${latLng.lat.toFixed(5)}_${latLng.lng.toFixed(5)}`;
+                    let value;
+                    
+                    if (this._valueCache[valueCacheKey]) {
+                        value = this._valueCache[valueCacheKey];
+                    } else {
+                        // Интерполируем значение в этой точке
+                        value = interpolateIDW(latLng.lat, latLng.lng, points);
+                        if (value !== null) {
+                            this._valueCache[valueCacheKey] = value;
+                        }
+                    }
+                    
+                    gridValues[y][x] = value;
+                }
+            }
+            
+            // Рисуем плавные переходы с изолиниями, как в javascript-temperatureMap
+            this._drawContours(ctx, gridValues, resolution, size.x, size.y);
+            
+            // Сохраняем нарисованный тайл в кэш
+            if (cacheKey) {
+                this._tileCache[cacheKey] = ctx.getImageData(0, 0, size.x, size.y);
+            }
+        },
+        
+        // Рисуем контурные линии для плавных переходов - как в javascript-temperatureMap
+        _drawContours: function(ctx, gridValues, resolution, width, height) {
+            if (!gridValues || gridValues.length === 0) return;
+            
+            // Определяем интервалы рейтинга для изолиний
+            const levels = [1.5, 2.0, 2.5, 3.0, 3.25, 3.5, 3.75, 4.0, 4.25, 4.5, 4.75, 5.0];
+            
+            // Создаем временный canvas для прозрачных градиентов
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // Определяем высоту и ширину сетки
+            const gridHeight = gridValues.length;
+            const gridWidth = gridValues[0].length;
+            
+            // Рисуем каждую ячейку сетки с плавными переходами
+            for (let y = 0; y < gridHeight; y++) {
+                for (let x = 0; x < gridWidth; x++) {
+                    const value = gridValues[y][x];
+                    
+                    if (value === null) continue;
+                    
+                    // Координаты ячейки на канвасе
+                    const pixelX = x * resolution;
+                    const pixelY = y * resolution;
+                    
+                    // Получаем цвет для этого значения
+                    const color = getColorForRating(value);
+                    const rgb = hexToRgb(color);
+                    
+                    // Устанавливаем прозрачность в зависимости от уровня зума и расстояния до края
+                    const alpha = 0.7;
+                    
+                    // Рисуем прямоугольник с этим цветом
+                    tempCtx.fillStyle = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
+                    tempCtx.fillRect(pixelX, pixelY, resolution, resolution);
+                }
+            }
+            
+            // Создаем радиальный градиент для сглаживания краев ячеек
+            for (let y = 0; y < gridHeight - 1; y++) {
+                for (let x = 0; x < gridWidth - 1; x++) {
+                    const value1 = gridValues[y][x];
+                    const value2 = gridValues[y][x+1];
+                    const value3 = gridValues[y+1][x];
+                    const value4 = gridValues[y+1][x+1];
+                    
+                    // Пропускаем, если какие-то значения null
+                    if (value1 === null || value2 === null || value3 === null || value4 === null) continue;
+                    
+                    // Координаты ячейки
+                    const pixelX = x * resolution;
+                    const pixelY = y * resolution;
+                    
+                    // Находим контуры и рисуем градиенты между соседними ячейками
+                    // Градиент по горизонтали
+                    if (Math.abs(value1 - value2) > 0.1) {
+                        const gradient = tempCtx.createLinearGradient(pixelX, pixelY, pixelX + resolution, pixelY);
+                        
+                        const color1 = getColorForRating(value1);
+                        const color2 = getColorForRating(value2);
+                        const rgb1 = hexToRgb(color1);
+                        const rgb2 = hexToRgb(color2);
+                        
+                        gradient.addColorStop(0, `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, 0.7)`);
+                        gradient.addColorStop(1, `rgba(${rgb2.r}, ${rgb2.g}, ${rgb2.b}, 0.7)`);
+                        
+                        tempCtx.fillStyle = gradient;
+                        tempCtx.fillRect(pixelX, pixelY, resolution, resolution / 2);
+                    }
+                    
+                    // Градиент по вертикали
+                    if (Math.abs(value1 - value3) > 0.1) {
+                        const gradient = tempCtx.createLinearGradient(pixelX, pixelY, pixelX, pixelY + resolution);
+                        
+                        const color1 = getColorForRating(value1);
+                        const color3 = getColorForRating(value3);
+                        const rgb1 = hexToRgb(color1);
+                        const rgb3 = hexToRgb(color3);
+                        
+                        gradient.addColorStop(0, `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, 0.7)`);
+                        gradient.addColorStop(1, `rgba(${rgb3.r}, ${rgb3.g}, ${rgb3.b}, 0.7)`);
+                        
+                        tempCtx.fillStyle = gradient;
+                        tempCtx.fillRect(pixelX, pixelY, resolution / 2, resolution);
+                    }
+                    
+                    // Радиальный градиент для углов
+                    if (Math.abs(value1 - value4) > 0.1) {
+                        const gradient = tempCtx.createRadialGradient(
+                            pixelX + resolution / 2, pixelY + resolution / 2, 0,
+                            pixelX + resolution / 2, pixelY + resolution / 2, resolution * 0.7
+                        );
+                        
+                        const color1 = getColorForRating(value1);
+                        const color4 = getColorForRating(value4);
+                        const rgb1 = hexToRgb(color1);
+                        const rgb4 = hexToRgb(color4);
+                        
+                        gradient.addColorStop(0, `rgba(${rgb1.r}, ${rgb1.g}, ${rgb1.b}, 0.5)`);
+                        gradient.addColorStop(1, `rgba(${rgb4.r}, ${rgb4.g}, ${rgb4.b}, 0.5)`);
+                        
+                        tempCtx.fillStyle = gradient;
+                        tempCtx.fillRect(pixelX, pixelY, resolution, resolution);
+                    }
+                }
+            }
+            
+            // Рисуем изолинии (контуры) для определенных значений рейтинга
+            for (let i = 0; i < levels.length - 1; i++) {
+                const level = (levels[i] + levels[i+1]) / 2;
+                tempCtx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+                tempCtx.lineWidth = 0.5;
+                
+                // Проходим по сетке и ищем ячейки, пересекающие уровень
+                for (let y = 0; y < gridHeight - 1; y++) {
+                    for (let x = 0; x < gridWidth - 1; x++) {
+                        const value1 = gridValues[y][x];
+                        const value2 = gridValues[y][x+1];
+                        const value3 = gridValues[y+1][x];
+                        const value4 = gridValues[y+1][x+1];
+                        
+                        // Пропускаем, если какие-то значения null
+                        if (value1 === null || value2 === null || value3 === null || value4 === null) continue;
+                        
+                        // Проверяем, пересекает ли уровень эту ячейку
+                        const corner1 = value1 > level;
+                        const corner2 = value2 > level;
+                        const corner3 = value3 > level;
+                        const corner4 = value4 > level;
+                        
+                        // Если уровень не пересекает ячейку, пропускаем
+                        if ((corner1 && corner2 && corner3 && corner4) || 
+                            (!corner1 && !corner2 && !corner3 && !corner4)) {
+                            continue;
+                        }
+                        
+                        // Координаты ячейки
+                        const pixelX = x * resolution;
+                        const pixelY = y * resolution;
+                        
+                        // Рисуем изолинию через ячейку
+                        tempCtx.beginPath();
+                        
+                        // Нахождение точек пересечения на краях ячейки
+                        // и рисование линии между ними
+                        // Это создаст эффект изолинии
+                        
+                        // Верхний край
+                        if ((corner1 && !corner2) || (!corner1 && corner2)) {
+                            const ratio = Math.abs((level - value1) / (value2 - value1));
+                            const intersectX = pixelX + ratio * resolution;
+                            tempCtx.moveTo(intersectX, pixelY);
+                        }
+                        
+                        // Правый край
+                        if ((corner2 && !corner4) || (!corner2 && corner4)) {
+                            const ratio = Math.abs((level - value2) / (value4 - value2));
+                            const intersectY = pixelY + ratio * resolution;
+                            
+                            if (tempCtx._path && tempCtx._path.length > 0) {
+                                tempCtx.lineTo(pixelX + resolution, intersectY);
+                            } else {
+                                tempCtx.moveTo(pixelX + resolution, intersectY);
+                            }
+                        }
+                        
+                        // Нижний край
+                        if ((corner3 && !corner4) || (!corner3 && corner4)) {
+                            const ratio = Math.abs((level - value3) / (value4 - value3));
+                            const intersectX = pixelX + ratio * resolution;
+                            
+                            if (tempCtx._path && tempCtx._path.length > 0) {
+                                tempCtx.lineTo(intersectX, pixelY + resolution);
+                            } else {
+                                tempCtx.moveTo(intersectX, pixelY + resolution);
+                            }
+                        }
+                        
+                        // Левый край
+                        if ((corner1 && !corner3) || (!corner1 && corner3)) {
+                            const ratio = Math.abs((level - value1) / (value3 - value1));
+                            const intersectY = pixelY + ratio * resolution;
+                            
+                            if (tempCtx._path && tempCtx._path.length > 0) {
+                                tempCtx.lineTo(pixelX, intersectY);
+                            } else {
+                                tempCtx.moveTo(pixelX, intersectY);
+                            }
+                        }
+                        
+                        tempCtx.stroke();
+                    }
+                }
+            }
+            
+            // Копируем результат на основной канвас
+            ctx.drawImage(tempCanvas, 0, 0);
+        },
+        
+        // Очистка кэша при удалении слоя
+        onRemove: function(map) {
+            this._tileCache = {};
+            this._valueCache = {};
+            L.GridLayer.prototype.onRemove.call(this, map);
+        },
+        
+        // Преобразование координат пикселя тайла в географические координаты
+        _getLatLngFromPixel: function(x, y, nw, se, tileSize) {
+            const latDiff = nw.lat - se.lat;
+            const lngDiff = se.lng - nw.lng;
+            
+            const lat = nw.lat - (y / tileSize.y) * latDiff;
+            const lng = nw.lng + (x / tileSize.x) * lngDiff;
+            
+            return L.latLng(lat, lng);
+        }
     });
     
-    // Расширяем границы на радиус интерполяции
-    const latExpand = IDW_RADIUS / 110574;
-    const lngExpand = IDW_RADIUS / (111320 * Math.cos(minLat * Math.PI / 180));
-    minLat -= latExpand;
-    maxLat += latExpand;
-    minLng -= lngExpand;
-    maxLng += lngExpand;
-    
-    // Размер шага для сетки интерполяции (в градусах)
-    const step = 0.003; // примерно 300 метров
-    
-    // Создаем полигоны для визуализации интерполированных значений
-    const polygons = [];
-    
-    for (let lat = minLat; lat <= maxLat; lat += step) {
-        for (let lng = minLng; lng <= maxLng; lng += step) {
-            // Интерполируем значение рейтинга
-            const rating = interpolateIDW(lat, lng, gridPoints);
-            
-            if (rating !== null) {
-                // Получаем цвет для рейтинга
-                const color = getColorForRating(rating);
-                
-                // Координаты углов полигона
-                const coords = [
-                    [lat, lng],
-                    [lat + step, lng],
-                    [lat + step, lng + step],
-                    [lat, lng + step]
-                ];
-                
-                // Создаем полигон
-                const polygon = L.polygon(coords, {
-                    color: '#333333', // Цвет границы полигона
-                    fillColor: color,
-                    fillOpacity: 0.7,
-                    weight: 0.5,      // Толщина границы полигона
-                    opacity: 0.8      // Прозрачность границы
-                });
-                
-                polygons.push(polygon);
-            }
-        }
-    }
+    // Создаем экземпляр слоя
+    const layer = new HeatmapLayer({
+        tileSize: 256,
+        minZoom: 10,
+        maxZoom: 18,
+        updateWhenIdle: true,
+        updateWhenZooming: false,
+        keepBuffer: 1 // Уменьшаем буфер для экономии памяти
+    });
     
     // Добавляем обработчик клика на карту
     map.on('click', showPointInfo);
     
-    // Создаем слой из всех полигонов
-    return L.layerGroup(polygons);
+    return layer;
 }
 
 // После загрузки страницы показываем тепловую карту всех заведений
@@ -470,6 +775,8 @@ window.onload = function() {
 
 // Глобальная переменная для хранения текущего типа заведений
 window.currentPlaceType = 'all';
+// Глобальная переменная для хранения текущего слоя тепловой карты
+window.currentHeatmapLayer = null;
 
 // Основная функция для отображения хитмапа
 function showHeatmap(type) {
@@ -482,30 +789,28 @@ function showHeatmap(type) {
     }
     
     // Полная очистка карты перед отображением новых данных
-    // Удаляем все слои, кроме базового слоя OpenStreetMap
+    // Сначала удаляем существующий слой тепловой карты, если он есть
+    if (window.currentHeatmapLayer) {
+        try {
+            map.removeLayer(window.currentHeatmapLayer);
+        } catch (e) {
+            console.warn("Не удалось удалить текущий слой:", e);
+        }
+        window.currentHeatmapLayer = null;
+    }
+    
+    // Очищаем все остальные слои (кроме базового)
     map.eachLayer(function(layer) {
         // Проверяем, что это не базовый слой с тайлами OpenStreetMap
         if (!layer._url || !layer._url.includes('openstreetmap.org')) {
-            map.removeLayer(layer);
+            try {
+                map.removeLayer(layer);
+            } catch (e) {
+                console.warn("Не удалось удалить слой:", e);
+            }
         }
     });
     
-    // Очищаем предыдущие слои из массива
-    if (window.currentLayers && window.currentLayers.length > 0) {
-        window.currentLayers.forEach(layer => {
-            if (layer) {
-                try {
-                    map.removeLayer(layer);
-                } catch (e) {
-                    console.warn("Не удалось удалить слой:", e);
-                }
-            }
-        });
-    }
-    
-    // Сбрасываем массив слоев
-    window.currentLayers = [];
-
     // Очищаем маркеры и выбранные точки
     markersLayer.clearLayers();
     selectedPointsLayer.clearLayers();
@@ -594,7 +899,7 @@ function showHeatmap(type) {
             heatmapLayer.addTo(map);
             
             // Сохраняем ссылку на текущий слой
-            window.currentLayers = [heatmapLayer];
+            window.currentHeatmapLayer = heatmapLayer;
             console.log(`Тепловая карта для типа ${type} добавлена на карту`);
         })
         .catch(error => {
