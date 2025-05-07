@@ -899,6 +899,7 @@ function showHeatmap(type) {
             heatmapLayer.addTo(map);
             
             // Сохраняем ссылку на текущий слой
+            window.currentLayers = [heatmapLayer];
             window.currentHeatmapLayer = heatmapLayer;
             console.log(`Тепловая карта для типа ${type} добавлена на карту`);
         })
