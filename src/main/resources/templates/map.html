@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тепловая карта заведений</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', sans-serif;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        #sidebar {
+            width: 280px;
+            background-color: #fff;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        
+        #map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            text-align: center;
+            background-color: #4285F4;
+            color: white;
+        }
+        
+        .sidebar-header h2 {
+            font-size: 1.5rem;
+            margin-bottom: 5px;
+        }
+        
+        .sidebar-header p {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        
+        .place-buttons {
+            padding: 20px;
+        }
+        
+        .place-type {
+            margin-bottom: 16px;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .place-type:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .place-button {
+            width: 100%;
+            padding: 15px;
+            border: none;
+            background-color: #f8f9fa;
+            text-align: left;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background-color 0.2s;
+        }
+        
+        .place-button:hover {
+            background-color: #f1f3f4;
+        }
+        
+        .place-button.active {
+            background-color: #e8f0fe;
+            color: #1a73e8;
+            border-left: 4px solid #1a73e8;
+        }
+        
+        .place-button i {
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+        
+        .place-button .icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .place-info {
+            padding: 10px 15px;
+            background-color: #fafafa;
+            border-top: 1px solid #eee;
+            font-size: 0.9rem;
+        }
+        
+        .place-info .rating {
+            display: flex;
+            align-items: center;
+            margin-top: 5px;
+        }
+        
+        .place-info .stars {
+            color: #FFC107;
+            margin-right: 5px;
+        }
+        
+        .place-info .count {
+            color: #5f6368;
+            font-size: 0.8rem;
+        }
+        
+        footer {
+            padding: 15px;
+            background-color: #f2f2f2;
+            text-align: center;
+            font-size: 0.8rem;
+            color: #5f6368;
+            margin-top: auto;
+        }
+        
+        .toggle-sidebar {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1001;
+            background: white;
+            border: none;
+            border-radius: 4px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            display: none;
+        }
+        
+        .info-panel {
+            max-width: 350px !important;
+            max-height: 400px !important;
+        }
+        
+        @media (max-width: 768px) {
+            #sidebar {
+                position: absolute;
+                left: -280px;
+                height: 100%;
+                transition: left 0.3s ease;
+            }
+            
+            #sidebar.open {
+                left: 0;
+            }
+            
+            .toggle-sidebar {
+                display: flex;
+            }
+        }
+        
+        /* Иконки для типов заведений */
+        .icon-restaurant:before { content: "🍽️"; }
+        .icon-bar:before { content: "🍸"; }
+        .icon-cafe:before { content: "☕"; }
+        .icon-bank:before { content: "🏦"; }
+        .icon-pharmacy:before { content: "💊"; }
+        .icon-gym:before { content: "💪"; }
+        .icon-school:before { content: "🏫"; }
+        .icon-test:before { content: "🧪"; }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h2>Карта заведений</h2>
+            <p>Исследуйте город по рейтингам</p>
+        </div>
+        
+        <div class="place-buttons">
+            <div class="place-type">
+                <button id="all-button" class="place-button active" onclick="activateButton(this, 'all')">
+                    <span><span class="icon">🏙️</span> Все заведения</span>
+                    <span id="all-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="all-stars">★★★★★</span>
+                        <span class="rating-value" id="all-rating">0.0</span>
+                        <span class="count" id="all-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="restaurant-button" class="place-button" onclick="activateButton(this, 'restaurant')">
+                    <span><span class="icon icon-restaurant"></span> Рестораны</span>
+                    <span id="restaurant-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="restaurant-stars">★★★★★</span>
+                        <span class="rating-value" id="restaurant-rating">0.0</span>
+                        <span class="count" id="restaurant-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="cafe-button" class="place-button" onclick="activateButton(this, 'cafe')">
+                    <span><span class="icon icon-cafe"></span> Кафе</span>
+                    <span id="cafe-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="cafe-stars">★★★★★</span>
+                        <span class="rating-value" id="cafe-rating">0.0</span>
+                        <span class="count" id="cafe-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="bar-button" class="place-button" onclick="activateButton(this, 'bar')">
+                    <span><span class="icon icon-bar"></span> Бары</span>
+                    <span id="bar-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="bar-stars">★★★★★</span>
+                        <span class="rating-value" id="bar-rating">0.0</span>
+                        <span class="count" id="bar-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="bank-button" class="place-button" onclick="activateButton(this, 'bank')">
+                    <span><span class="icon icon-bank"></span> Банки</span>
+                    <span id="bank-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="bank-stars">★★★★★</span>
+                        <span class="rating-value" id="bank-rating">0.0</span>
+                        <span class="count" id="bank-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="pharmacy-button" class="place-button" onclick="activateButton(this, 'pharmacy')">
+                    <span><span class="icon icon-pharmacy"></span> Аптеки</span>
+                    <span id="pharmacy-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="pharmacy-stars">★★★★★</span>
+                        <span class="rating-value" id="pharmacy-rating">0.0</span>
+                        <span class="count" id="pharmacy-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="gym-button" class="place-button" onclick="activateButton(this, 'gym')">
+                    <span><span class="icon icon-gym"></span> Спортзалы</span>
+                    <span id="gym-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="gym-stars">★★★★★</span>
+                        <span class="rating-value" id="gym-rating">0.0</span>
+                        <span class="count" id="gym-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="school-button" class="place-button" onclick="activateButton(this, 'school')">
+                    <span><span class="icon icon-school"></span> Школы</span>
+                    <span id="school-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="school-stars">★★★★★</span>
+                        <span class="rating-value" id="school-rating">0.0</span>
+                        <span class="count" id="school-total"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="place-type">
+                <button id="test-button" class="place-button" onclick="activateButton(this, 'test')">
+                    <span><span class="icon icon-test"></span> Тестовые заведения</span>
+                    <span id="test-count"></span>
+                </button>
+                <div class="place-info">
+                    <div>Средний рейтинг:</div>
+                    <div class="rating">
+                        <span class="stars" id="test-stars">★★★★★</span>
+                        <span class="rating-value" id="test-rating">0.0</span>
+                        <span class="count" id="test-total"></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            © 2023 Карта заведений | Все права защищены
+        </footer>
+    </div>
+    
+    <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+    
+    <div id="map-container">
+        <div id="map"></div>
+    </div>
+    
+    <script src="/js/heatmap.js"></script>
+    <script>
+        // Функция для переключения активной кнопки и отображения тепловой карты
+        function activateButton(button, type) {
+            // Удаляем класс active со всех кнопок
+            document.querySelectorAll('.place-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Добавляем класс active к нажатой кнопке
+            button.classList.add('active');
+            
+            // Отображаем тепловую карту соответствующего типа
+            showHeatmap(type);
+        }
+        
+        // Функция для отображения/скрытия боковой панели на мобильных устройствах
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('open');
+        }
+        
+        // Функция для отображения звёзд на основе рейтинга
+        function setStars(elementId, rating) {
+            const starsElement = document.getElementById(elementId);
+            if (!starsElement) return;
+            
+            if (rating < 0.5) {
+                starsElement.innerHTML = '☆☆☆☆☆';
+                return;
+            }
+            
+            const fullStars = Math.floor(rating);
+            const halfStar = rating % 1 >= 0.5;
+            let stars = '';
+            
+            for (let i = 0; i < 5; i++) {
+                if (i < fullStars) {
+                    stars += '★';
+                } else if (i === fullStars && halfStar) {
+                    stars += '★';
+                } else {
+                    stars += '☆';
+                }
+            }
+            
+            starsElement.innerHTML = stars;
+        }
+        
+        // Загружаем информацию о заведениях при загрузке страницы
+        window.addEventListener('load', function() {
+            // Массив типов заведений
+            const placeTypes = ['all', 'restaurant', 'cafe', 'bar', 'bank', 'pharmacy', 'gym', 'school', 'test'];
+            
+            // Для каждого типа загружаем статистику
+            placeTypes.forEach(type => {
+                fetch(`/api/stats/${type}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Обновляем информацию в боковой панели
+                        document.getElementById(`${type}-rating`).textContent = data.averageRating.toFixed(1);
+                        document.getElementById(`${type}-total`).textContent = `(${data.count} мест)`;
+                        document.getElementById(`${type}-count`).textContent = data.count;
+                        
+                        // Устанавливаем звезды
+                        setStars(`${type}-stars`, data.averageRating);
+                    })
+                    .catch(error => console.error(`Ошибка загрузки статистики для ${type}:`, error));
+            });
+            
+            // Инициализируем карту с отображением всех заведений
+            activateButton(document.getElementById('all-button'), 'all');
+        });
+    </script>
+</body>
+</html>

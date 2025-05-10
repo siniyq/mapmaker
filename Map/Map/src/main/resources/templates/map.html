@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Heatmap</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+    <style>
+        #map { height: 100vh; }
+        .controls { 
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div class="controls">
+        <button onclick="showLayer('restaurants')">Рестораны</button>
+        <button onclick="showLayer('bars')">Бары</button>
+        <button onclick="showLayer('cafes')">Кафе</button>
+        <button onclick="showLayer('banks')">Банки</button>
+        <button onclick="showLayer('pharmacy')">Аптеки</button>
+        <button onclick="showLayer('gym')">Спортзалы</button>
+    </div>
+
+    <script>
+        var map = L.map('map').setView([55.1904, 30.2049], 13);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var heat;
+
+        function showLayer(type) {
+            if (heat) {
+                map.removeLayer(heat);
+            }
+
+            fetch(`/heatmap/${type}`)
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Received data:', data);
+                    
+                    // Преобразуем данные в массив [lat, lng, intensity]
+                    var points = [];
+                    data.features.forEach(feature => {
+                        var lat = feature.geometry.coordinates[1];
+                        var lng = feature.geometry.coordinates[0];
+                        points.push([lat, lng, 1]); // фиксированная интенсивность для теста
+                    });
+
+                    console.log('Points:', points);
+
+                    heat = L.heatLayer(points, {
+                        radius: 25,
+                        blur: 35,
+                        maxZoom: 10,
+                        max: 1.0,
+                        minOpacity: 0.4,
+                        gradient: {
+                            0.0: '#0000ff',    // темно-синий
+                            0.1: '#0040ff',    // синий
+                            0.2: '#0080ff',    // голубой
+                            0.3: '#00bfff',    // светло-голубой
+                            0.4: '#00ffff',    // циан
+                            0.5: '#00ff80',    // бирюзовый
+                            0.6: '#00ff00',    // зеленый
+                            0.7: '#80ff00',    // салатовый
+                            0.8: '#ffff00',    // желтый
+                            0.85: '#ffbf00',   // оранжево-желтый
+                            0.9: '#ff8000',    // оранжевый
+                            0.95: '#ff4000',   // красно-оранжевый
+                            1.0: '#ff0000'     // красный
+                        }
+                    }).addTo(map);
+                })
+                .catch(error => console.error('Error:', error));
+        }
+    </script>
+</body>
+</html>
