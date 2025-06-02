@@ -3,6 +3,7 @@
 :root {
     /* Основные цвета для неоморфизма (светлая тема) */
     --background: #e0e5ec;
+    --background-rgb: 224, 229, 236;
     --text-color: #333;
     --shadow-light: #ffffff;
     --shadow-dark: #a3b1c6;
@@ -16,6 +17,7 @@
 /* Переменные для темной темы */
 .dark-theme {
     --background: #2d3436;
+    --background-rgb: 45, 52, 54;
     --text-color: #dfe6e9;
     --shadow-light: #3d4548;
     --shadow-dark: #1e2224;
@@ -173,6 +175,7 @@ body {
     box-shadow: inset 2px 2px 5px var(--shadow-dark), 
                 inset -2px -2px 5px var(--shadow-light);
     transition: box-shadow 0.3s ease;
+    background-color: rgba(var(--background-rgb), 1);
 }
 
 .neo-info-box p {
@@ -193,7 +196,7 @@ body {
     margin-top: 15px;
     padding: 15px;
     border-radius: 10px;
-    background-color: var(--background);
+    background-color: rgba(var(--background-rgb), 1);
     box-shadow: inset 2px 2px 5px var(--shadow-dark), 
                 inset -2px -2px 5px var(--shadow-light);
     font-size: 0.9rem;
@@ -321,6 +324,7 @@ input[type="radio"]:checked::before {
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
     z-index: 1000;
     transition: all 0.3s ease;
+    pointer-events: auto;
 }
 
 .dark-theme #weather-panel {
@@ -470,6 +474,7 @@ input[type="radio"]:checked::before {
     z-index: 1000;
     width: 250px;
     transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    pointer-events: auto;
 }
 
 /* Стилизация скроллбара */
@@ -915,4 +920,25 @@ input[type="radio"]:checked::before {
 /* Стиль для категорий при переключении */
 .category-transition {
     transition: all 0.3s ease;
+}
+
+/* Стили для блоков информации о маршруте, чтобы они перехватывали клики */
+#route-info-container {
+    pointer-events: none;
+}
+
+#route-info, #route-info-panel {
+    pointer-events: auto;
+}
+
+.neo-info-box, #route-description, #cultural-route-description {
+    pointer-events: auto;
+}
+
+/* Убедимся, что интерактивные элементы внутри блоков работают */
+#route-info button, #route-info-panel button, 
+#route-info a, #route-info-panel a,
+#route-info input, #route-info-panel input,
+#route-info select, #route-info-panel select {
+    pointer-events: auto;
 }

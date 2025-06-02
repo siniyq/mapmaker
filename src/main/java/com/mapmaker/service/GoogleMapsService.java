@@ -96,7 +96,7 @@ public class GoogleMapsService {
 
         // Создаем свой GeoApiContext с явно указанным API-ключом
         // Используем другой формат API-ключа для тестирования
-        String apiKey = "AIzaSyC8n6OCeLcGqrlUi2FSeUPlUirQA2DrflE";
+        String apiKey = "AIzaSyBQwvM_w_zjXN6uPdanOsbrAsSKkcbNX9M";
         
         System.out.println("Длина API-ключа: " + apiKey.length());
         System.out.println("API-ключ содержит пробелы: " + apiKey.contains(" "));

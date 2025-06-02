@@ -54,6 +54,11 @@ function createHeatmap(metric) {
     clearMap(); // Очищаем текущую карту
     clearHeatmap();
     
+    // Удаляем все маркеры при отображении тепловой карты плотности
+    if (metric === 'density' && markersLayer) {
+        markersLayer.clearLayers();
+    }
+    
     // Получаем тип заведений
     const heatmapType = document.getElementById('heatmap-type').value;
     
@@ -75,7 +80,8 @@ function createHeatmap(metric) {
                     return response.json().then(data => ({
                         data: data,
                         cityBoundary: vitebskPolygonCoords,
-                        geojson: geojson
+                        geojson: geojson,
+                        metric: metric // Передаем метрику дальше
                     }));
                 });
         })
@@ -83,6 +89,7 @@ function createHeatmap(metric) {
             const data = result.data;
             const vitebskPolygonCoords = result.cityBoundary;
             const geojson = result.geojson;
+            const metric = result.metric; // Получаем метрику
             
             if (!data || !data.points || data.points.length === 0) {
                 console.log('Получены данные:', data);
@@ -91,10 +98,12 @@ function createHeatmap(metric) {
             }
             
             console.log('Получено точек для тепловой карты:', data.points.length);
-            const points = data.points;
+            let points = data.points;
             
-            // Добавляем маркеры точек
-            addPointMarkers(points, heatmapType);
+            // Добавляем маркеры точек с указанием текущей метрики
+            if (metric === 'rating') {
+                addPointMarkers(points, heatmapType, metric);
+            }
             
             // Находим границы полигона
             let minLat = Number.MAX_VALUE;
@@ -154,7 +163,7 @@ function createHeatmap(metric) {
             // 5. Если отображаем плотность, создаем карту плотности
             if (metric === 'density') {
                 // Создаем сетку плотности на основе разделения на ячейки
-                const cellSize = 0.0015; // ~150м
+                const cellSize = 0.0065; // Уменьшаем размер ячейки для более плотного покрытия (~120м)
                 const densityGrid = {};
                 
                 // Заполняем сетку плотности
@@ -204,30 +213,65 @@ function createHeatmap(metric) {
                                 count: cell.count,
                                 points: cell.points
                             });
+                            
+                            // Обновляем точки для маркеров с информацией о плотности
+                            cell.points.forEach(p => {
+                                p.count = density;
+                            });
                         }
                     }
+                }
+                
+                // Заменяем стандартные точки на точки с информацией о плотности для маркеров
+                if (densityGrid) {
+                    const densityPoints = [];
+                    for (const key in densityGrid) {
+                        if (densityGrid[key].count > 0) {
+                            densityGrid[key].points.forEach(p => {
+                                densityPoints.push(p);
+                            });
+                        }
+                    }
+                    points = densityPoints;
                 }
                 
                 console.log(`Создано ${densityCells.length} ячеек плотности, максимальная плотность: ${maxDensity}`);
                 
                 // Определяем функцию для получения цвета в зависимости от плотности
                 const getDensityColor = (value) => {
-                    // Усиливаем контраст с помощью степенной функции
-                    // Math.pow увеличивает контраст для низких значений
-                    const normalizedValue = Math.pow(Math.log(value + 1) / Math.log(maxDensity + 1), 0.7);
+                    // Используем порог в 10 вместо 6 для более яркого отображения областей с высокой плотностью
+                    const maxDisplayValue = Math.max(10, maxDensity); 
                     
-                    if (normalizedValue < 0.25) {
-                        // Насыщенный синий -> Голубой
-                        return `rgba(50, ${Math.round(50 + 205 * normalizedValue / 0.25)}, 255, 0.95)`;
-                    } else if (normalizedValue < 0.5) {
-                        // Голубой -> Зеленый
-                        return `rgba(0, 255, ${Math.round(255 * (1 - (normalizedValue - 0.25) / 0.25))}, 0.95)`;
-                    } else if (normalizedValue < 0.75) {
-                        // Зеленый -> Желтый
-                        return `rgba(${Math.round(255 * (normalizedValue - 0.5) / 0.25)}, 255, 0, 0.95)`;
+                    // Для низких значений используем линейную шкалу, для высоких - логарифмическую
+                    // Это сделает различия между областями более заметными
+                    let normalizedValue;
+                    
+                    if (value <= 5) {
+                        // Для значений до 5 используем линейную шкалу
+                        normalizedValue = value / 5 * 0.8; // максимальное значение 0.8 (для value=5)
                     } else {
-                        // Желтый -> Красный
-                        return `rgba(255, ${Math.round(255 * (1 - (normalizedValue - 0.75) / 0.25))}, 0, 0.95)`;
+                        // Для значений выше 5 используем логарифмическую шкалу
+                        normalizedValue = 0.8 + Math.log(value - 4) / Math.log(maxDisplayValue - 4) * 0.2;
+                    }
+                    
+                    normalizedValue = Math.min(1.0, normalizedValue); // ограничиваем максимальным значением 1.0
+                    
+                    // Используем 5 равных диапазонов для плотности
+                    if (normalizedValue <= 0.2) {
+                        // Синий (1 точка)
+                        return 'rgba(70, 130, 190, 0.95)';
+                    } else if (normalizedValue <= 0.4) {
+                        // Голубой (2 точки)
+                        return 'rgba(30, 255, 255, 0.95)';
+                    } else if (normalizedValue <= 0.6) {
+                        // Зеленый (3 точки)
+                        return 'rgba(110, 255, 90, 0.95)';
+                    } else if (normalizedValue <= 0.8) {
+                        // Желтый (4-5 точек)
+                        return 'rgba(255, 255, 0, 0.95)';
+                    } else {
+                        // Красный (6+ точек)
+                        return 'rgba(255, 75, 0, 0.95)';
                     }
                 };
                 
@@ -237,15 +281,16 @@ function createHeatmap(metric) {
                 heatCanvas.height = canvasHeight;
                 const heatCtx = heatCanvas.getContext('2d');
                 
-                // Устанавливаем параметры размытия - уменьшаем для большей четкости
-                heatCtx.filter = `blur(15px)`;
+                // Устанавливаем параметры размытия для более плавных переходов
+                heatCtx.filter = `blur(12px)`;
                 
                 // Рисуем градиенты для каждой ячейки плотности
                 densityCells.forEach(cell => {
-                    // Радиус зависит от количества точек в ячейке
-                    // Увеличиваем размер для лучшей видимости
-                    const baseRadius = 35;
-                    const pointRadius = baseRadius * Math.min(1.8, Math.sqrt(cell.count) / 1.8);
+                    // Адаптивный радиус: с небольшим увеличением в зависимости от количества точек
+                    // Это создаст более естественное распределение тепловой карты
+                    const baseRadius = 50; // Увеличиваем базовый радиус
+                    const scaling = Math.min(2.0, Math.sqrt(cell.count) / 1.5); // Более значительное масштабирование
+                    const pointRadius = baseRadius * scaling;
                     
                     // Создаем радиальный градиент
                     const gradient = heatCtx.createRadialGradient(
@@ -255,8 +300,9 @@ function createHeatmap(metric) {
                     
                     // Центр градиента - цвет в зависимости от плотности
                     gradient.addColorStop(0, getDensityColor(cell.value));
-                    // Промежуточная точка - для контраста делаем её ближе к краю
-                    gradient.addColorStop(0.85, getDensityColor(cell.value).replace('0.95', '0.5'));
+                    // Промежуточная точка - более плавный переход к прозрачности
+                    gradient.addColorStop(0.7, getDensityColor(cell.value).replace('0.95', '0.8'));
+                    gradient.addColorStop(0.9, getDensityColor(cell.value).replace('0.95', '0.3'));
                     // Края градиента - прозрачные
                     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                     
@@ -266,10 +312,11 @@ function createHeatmap(metric) {
                     heatCtx.arc(cell.x, cell.y, pointRadius, 0, Math.PI * 2);
                     heatCtx.fill();
                     
-                    // Добавляем яркий центр для увеличения контраста
+                    // Добавляем яркий центр для выделения центров высокой плотности
+                    const centerSize = pointRadius * 0.25; // Увеличиваем размер центра
                     heatCtx.beginPath();
-                    heatCtx.fillStyle = getDensityColor(cell.value * 1.2);
-                    heatCtx.arc(cell.x, cell.y, pointRadius * 0.25, 0, Math.PI * 2);
+                    heatCtx.fillStyle = getDensityColor(cell.value).replace('0.95', '1.0');
+                    heatCtx.arc(cell.x, cell.y, centerSize, 0, Math.PI * 2);
                     heatCtx.fill();
                 });
                 
@@ -442,7 +489,7 @@ function createHeatmap(metric) {
             );
             
             heatmapLayer = L.imageOverlay(canvas.toDataURL(), bounds, {
-                opacity: 0.9,
+                opacity: 1.0,
                 interactive: false
             }).addTo(map);
             
@@ -471,7 +518,7 @@ function createHeatmap(metric) {
 }
 
 // Функция добавления маркеров для каждой точки с данными
-function addPointMarkers(points, type) {
+function addPointMarkers(points, type, metric) {
     // Создаем новый слой для маркеров, если еще не создан
     if (!markersLayer) {
         markersLayer = L.layerGroup().addTo(map);
@@ -486,6 +533,15 @@ function addPointMarkers(points, type) {
         else if (rating < 3) return '#FFA726';   // Янтарный
         else if (rating < 4) return '#FFEB3B';   // Желтый
         else return '#76FF03';                   // Светло-зеленый
+    }
+    
+    // Функция для получения цвета маркера в зависимости от плотности
+    function getDensityMarkerColor(density) {
+        if (density <= 1) return '#4682BE';      // Синий (1 точка)
+        else if (density <= 2) return '#1EFFFF';  // Голубой (2 точки)
+        else if (density <= 3) return '#6EFF5A';  // Зеленый (3 точки)
+        else if (density <= 5) return '#FFFF00';  // Желтый (4-5 точек)
+        else return '#FF4B00';                   // Красный (6+ точек)
     }
     
     // Функция для получения базового цвета типа объекта
@@ -522,7 +578,10 @@ function addPointMarkers(points, type) {
     
     // Добавляем каждую точку как маркер на карту
     points.forEach(point => {
-        const markerColor = getMarkerColor(point.value);
+        const isRating = metric === 'rating';
+        const markerColor = isRating ? getMarkerColor(point.value) : getDensityMarkerColor(point.count || 1);
+        const displayValue = isRating ? point.value.toFixed(1) : (point.count || 1);
+        const textColor = isRating ? (point.value < 3 ? 'white' : 'black') : (point.count > 3 ? 'white' : 'black');
         
         // Создаем HTML для пользовательского маркера
         const markerHtml = `
@@ -534,13 +593,13 @@ function addPointMarkers(points, type) {
                 display: flex;
                 justify-content: center;
                 align-items: center;
-                color: ${point.value < 3 ? 'white' : 'black'};
+                color: ${textColor};
                 font-weight: bold;
                 font-size: 11px;
                 border: 2px solid white;
                 box-shadow: 0 0 3px rgba(0,0,0,0.5);
             ">
-                ${point.value.toFixed(1)}
+                ${displayValue}
             </div>
         `;
         
@@ -562,7 +621,7 @@ function addPointMarkers(points, type) {
             <div style="text-align: center;">
                 <div style="font-size: 18px; margin-bottom: 5px;">${typeSymbol}</div>
                 <b>${type}</b><br>
-                Рейтинг: <b>${point.value.toFixed(1)}</b>
+                ${isRating ? `Рейтинг: <b>${point.value.toFixed(1)}</b>` : `Количество: <b>${point.count || 1}</b>`}
                 ${point.name ? `<br>Название: <b>${point.name}</b>` : ''}
                 ${point.address ? `<br>Адрес: ${point.address}` : ''}
             </div>
@@ -581,72 +640,96 @@ function clearHeatmap() {
     }
     if (markersLayer) {
         markersLayer.clearLayers();
+        map.removeLayer(markersLayer);
+        markersLayer = null;
     }
     removeLegend();
 }
 
 // Добавление легенды для тепловой карты
 function addHeatmapLegend(metric) {
-    // Создаем div для легенды
-    let legend = L.control({position: 'bottomright'});
-    legend.onAdd = function() {
-        let div = L.DomUtil.create('div', 'info legend');
-        div.style.backgroundColor = 'white';
-        div.style.padding = '10px';
-        div.style.border = '1px solid #ccc';
-        div.style.borderRadius = '5px';
-        div.style.boxShadow = '0 1px 5px rgba(0,0,0,0.4)';
-        div.style.maxWidth = '200px';
-        
-        let title = metric === 'rating' ? 'Рейтинг заведений' : 'Плотность заведений';
-        div.innerHTML = `<div style="text-align: center; margin-bottom: 8px; font-weight: bold; color: #333;">${title}</div>`;
-        
-        let values, colors, descriptions;
-        if (metric === 'rating') {
-            values = ['0-1', '1-2', '2-3', '3-4', '4-5'];
-            colors = ['#FF0000', '#FF7000', '#FFAA00', '#AAFF00', '#00FF00'];
-            descriptions = [
-                'Очень низкий', 
-                'Низкий', 
-                'Средний', 
-                'Хороший', 
-                'Отличный'
-            ];
-        } else {
-            values = ['Очень низкая', 'Низкая', 'Средняя', 'Высокая', 'Очень высокая'];
-            colors = ['#3232FF', '#00FFFF', '#00FF00', '#FFFF00', '#FF0000'];
-            descriptions = [
-                '1-2 заведения в области', 
-                '3-5 заведений',
-                '5-8 заведений',
-                '8-12 заведений',
-                '12+ заведений'
-            ];
-        }
-        
-        div.innerHTML += '<div style="margin-bottom: 5px; border-top: 1px solid #eee; padding-top: 5px;"></div>';
-        
-        for (let i = 0; i < values.length; i++) {
-            div.innerHTML += 
-                '<div style="display: flex; align-items: center; margin-bottom: 5px;">' +
-                '<i style="background:' + colors[i] + '; width: 18px; height: 18px; display: block; opacity: 0.9; margin-right: 8px;"></i> ' +
-                '<div><span style="font-weight: 500;">' + values[i] + '</span>' + 
-                '<br><span style="font-size: 0.8em; color: #666;">' + descriptions[i] + '</span></div>' +
-                '</div>';
-        }
-        
-        return div;
-    };
-    legend.addTo(map);
+    // Удаляем предыдущую легенду, если она существует
+    removeLegend();
     
-    // Сохраняем ссылку на легенду
+    // Создаем контейнер для легенды
+    const legend = document.createElement('div');
+    legend.id = 'heatmap-legend';
+    legend.style.cssText = `
+        position: absolute;
+        bottom: 35px;
+        left: 10px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 5px;
+        padding: 10px;
+        width: 240px;
+        z-index: 1000;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        font-family: Arial, sans-serif;
+        font-size: 12px;
+    `;
+    
+    // Заголовок легенды
+    const title = document.createElement('div');
+    title.style.cssText = 'font-weight: bold; margin-bottom: 8px; font-size: 14px;';
+    title.textContent = metric === 'rating' ? 'Рейтинг заведений' : 'Плотность заведений';
+    legend.appendChild(title);
+    
+    // Создаем градиентную шкалу
+    const gradientBar = document.createElement('div');
+    gradientBar.style.cssText = `
+        height: 20px;
+        width: 100%;
+        margin: 5px 0;
+        border-radius: 3px;
+        background: ${
+            metric === 'rating' 
+            ? 'linear-gradient(to right, #d73027, #fc8d59, #fee08b, #d9ef8b, #91cf60)'
+            : 'linear-gradient(to right, #4682BE, #1EFFFF, #6EFF5A, #FFFF00, #FF4B00)'
+        };
+    `;
+    legend.appendChild(gradientBar);
+    
+    // Добавляем метки
+    const labelsContainer = document.createElement('div');
+    labelsContainer.style.cssText = 'display: flex; justify-content: space-between; margin-top: 5px;';
+    
+    if (metric === 'rating') {
+        labelsContainer.innerHTML = `
+            <span>1.0</span>
+            <span>2.0</span>
+            <span>3.0</span>
+            <span>4.0</span>
+            <span>5.0</span>
+        `;
+    } else {
+        labelsContainer.innerHTML = `
+            <span>1</span>
+            <span>2</span>
+            <span>3</span>
+            <span>4-5</span>
+            <span>6+</span>
+        `;
+    }
+    
+    legend.appendChild(labelsContainer);
+    
+    // Описание
+    const description = document.createElement('div');
+    description.style.cssText = 'margin-top: 8px; font-size: 11px; color: #666;';
+    description.textContent = metric === 'rating' 
+        ? 'Средний рейтинг заведений в данной области' 
+        : 'Количество заведений в данной области';
+    legend.appendChild(description);
+    
+    // Добавляем легенду на карту
+    document.getElementById('map').appendChild(legend);
     heatmapLegend = legend;
 }
 
 // Удаление легенды
 function removeLegend() {
     if (heatmapLegend) {
-        heatmapLegend.remove();
+        document.getElementById('map').removeChild(heatmapLegend);
         heatmapLegend = null;
     }
 }

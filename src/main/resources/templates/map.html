@@ -226,7 +226,7 @@
         <div id="map"></div>
         
         <!-- Блок погоды (сдвинут левее, чтобы не перекрываться) -->
-        <div id="weather-panel" style="position: absolute; right: 300px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
+        <div id="weather-panel" style="position: absolute; right: 300px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: rgba(var(--background-rgb), 1); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); pointer-events: auto;">
             <div id="weather-box">
                 <div class="weather-header">
                     <span id="weather-icon">☀️</span>
@@ -260,8 +260,8 @@
         </div>
         
         <!-- Блоки информации о маршрутах (под тепловой картой, сдвинуты ниже) -->
-        <div id="route-info-container" style="position: absolute; right: 15px; top: 350px; z-index: 1000; width: 300px;">
-            <div id="route-info" style="display: none; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); margin-bottom: 15px;">
+        <div id="route-info-container" style="position: absolute; right: 15px; top: 350px; z-index: 1000; width: 300px; pointer-events: none;">
+            <div id="route-info" style="display: none; padding: 10px; border-radius: 10px; background-color: rgba(var(--background-rgb), 1); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); margin-bottom: 15px; pointer-events: auto;">
                 <h3>Информация о маршруте</h3>
                 <div class="neo-info-box">
                     <p>Расстояние: <span id="info-distance"></span> км</p>
@@ -272,14 +272,14 @@
                 </div>
             </div>
             
-            <div id="route-info-panel" style="display: none; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
-                <h3>Культурный маршрут</h3>
+            <div id="route-info-panel" style="display: none; padding: 10px; border-radius: 10px; background-color: rgba(var(--background-rgb), 1); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); pointer-events: auto;">
+                <h3>Информация о маршруте</h3>
                 <div class="neo-info-box">
                     <p>Расстояние: <span id="cultural-info-distance"></span> км</p>
                     <p>Время: <span id="cultural-info-time"></span> мин.</p>
-                    <p>Тип маршрута: <span id="cultural-route-type">Культурный</span></p>
-                    <button id="save-cultural-route" class="neo-button success">Сохранить маршрут</button>
-                    <div id="cultural-route-description"></div>
+                    <p>Тип маршрута: <span id="cultural-route-type" style="color: #4CAF50;">Культурный</span></p>
+                    <button id="save-cultural-route" class="neo-button success" style="background-color: #2ecc71; color: white; width: 100%; padding: 10px; margin: 10px 0; border: none; border-radius: 5px;">Сохранить маршрут</button>
+                    <div id="cultural-route-description" style="margin-top: 15px; padding: 15px; border-radius: 10px; background-color: rgba(var(--background-rgb), 1); box-shadow: inset 2px 2px 5px var(--shadow-dark), inset -2px -2px 5px var(--shadow-light); font-size: 0.9rem; max-height: 200px; overflow-y: auto;"></div>
                 </div>
             </div>
         </div>
@@ -576,6 +576,32 @@
                 });
             });
             
+            // Добавляем прослушиватели для блока погоды
+            const weatherPanel = document.getElementById('weather-panel');
+            if (weatherPanel) {
+                weatherPanel.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+                weatherPanel.addEventListener('dblclick', function(e) {
+                    e.stopPropagation();
+                });
+                weatherPanel.style.pointerEvents = 'auto';
+            }
+            
+            // Добавляем прослушиватели для блоков информации о маршруте
+            const routeInfoElements = document.querySelectorAll('#route-info, #route-info-panel, .neo-info-box, #route-description, #cultural-route-description');
+            routeInfoElements.forEach(element => {
+                if (element) {
+                    element.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                    });
+                    element.addEventListener('dblclick', function(e) {
+                        e.stopPropagation();
+                    });
+                    element.style.pointerEvents = 'auto';
+                }
+            });
+            
             // Проверяем активную категорию при загрузке страницы и скрываем/показываем элементы соответственно
             if (document.getElementById('category-cultural').classList.contains('active')) {
                 // Если активна категория "Культура", скрываем элементы тематического маршрута
@@ -793,6 +819,21 @@
             
             // Очищаем POI маркеры
             clearPoiMarkers();
+            
+            // Очищаем культурный маршрут
+            if (typeof clearCulturalRoute === 'function') {
+                clearCulturalRoute();
+            } else if (window.culturalRouteLayer) {
+                // Резервный вариант, если функция недоступна
+                map.removeLayer(window.culturalRouteLayer);
+                window.culturalRouteLayer = null;
+                
+                // Очищаем культурные маркеры, если они есть
+                if (window.culturalMarkers && window.culturalMarkers.length > 0) {
+                    window.culturalMarkers.forEach(marker => map.removeLayer(marker));
+                    window.culturalMarkers = [];
+                }
+            }
             
             // Сбрасываем точки А и Б
             startPoint = null;
@@ -2024,6 +2065,57 @@
         window.hideAllRouteInfo = hideAllRouteInfo;
         window.showThematicRouteInfo = showThematicRouteInfo;
         window.showCulturalRouteInfo = showCulturalRouteInfo;
+        
+        // Добавляем функцию, которая предотвращает клики по карте через UI элементы
+        function preventMapClicksThrough() {
+            // Список всех UI элементов, которые должны перехватывать клики
+            const uiElements = [
+                document.getElementById('weather-panel'),
+                document.getElementById('heatmap-panel'),
+                document.getElementById('route-info'),
+                document.getElementById('route-info-panel'),
+                ...document.querySelectorAll('.neo-info-box, #route-description, #cultural-route-description')
+            ].filter(el => el !== null);
+            
+            // Добавляем обработчики для всех найденных элементов
+            uiElements.forEach(element => {
+                // Удаляем старые обработчики, если они есть
+                element.removeEventListener('click', stopPropagation);
+                element.removeEventListener('dblclick', stopPropagation);
+                element.removeEventListener('mousedown', stopPropagation);
+                
+                // Добавляем новые обработчики
+                element.addEventListener('click', stopPropagation);
+                element.addEventListener('dblclick', stopPropagation);
+                element.addEventListener('mousedown', stopPropagation);
+                
+                // Убеждаемся, что CSS pointer-events установлен
+                element.style.pointerEvents = 'auto';
+            });
+            
+            // Функция для остановки распространения событий
+            function stopPropagation(e) {
+                e.stopPropagation();
+            }
+            
+            console.log('Обработчики предотвращения кликов через UI обновлены для', uiElements.length, 'элементов');
+        }
+        
+        // Вызываем функцию при загрузке страницы
+        document.addEventListener('DOMContentLoaded', preventMapClicksThrough);
+        
+        // Вызываем функцию при каждом показе информации о маршруте
+        const originalShowThematicRouteInfo = showThematicRouteInfo;
+        window.showThematicRouteInfo = function() {
+            originalShowThematicRouteInfo();
+            setTimeout(preventMapClicksThrough, 100);
+        };
+        
+        const originalShowCulturalRouteInfo = showCulturalRouteInfo;
+        window.showCulturalRouteInfo = function() {
+            originalShowCulturalRouteInfo();
+            setTimeout(preventMapClicksThrough, 100);
+        };
     </script>
 </body>
 </html>

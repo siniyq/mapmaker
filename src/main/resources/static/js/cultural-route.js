@@ -206,14 +206,24 @@ function updateCulturalRouteInfo(points, routePath) {
     if (culturalDistanceElement) culturalDistanceElement.textContent = distanceKm;
     if (culturalTimeElement) culturalTimeElement.textContent = timeMin;
     
-    // Список точек маршрута в том же формате, что и для тематического маршрута
+    // Форматирование в точности как в тематическом маршруте
     let descriptionHtml = '<h4>Описание маршрута:</h4><ol>';
     
     points.forEach((point, index) => {
         let poiDescription = `<li><b>${point.name}</b> - ${getReadableType(point.type)}`;
-        if (point.rating) poiDescription += `, рейтинг: ${point.rating.toFixed(1)}`;
-        if (point.vicinity) poiDescription += `, район: ${point.vicinity}`;
-        if (point.address) poiDescription += `, адрес: ${point.address}`;
+        
+        if (point.rating) {
+            poiDescription += `, рейтинг: ${point.rating.toFixed(1)}`;
+        }
+        
+        if (point.vicinity) {
+            poiDescription += `, район: ${point.vicinity}`;
+        }
+        
+        if (point.address) {
+            poiDescription += `, адрес: ${point.address}`;
+        }
+        
         poiDescription += '</li>';
         descriptionHtml += poiDescription;
     });
