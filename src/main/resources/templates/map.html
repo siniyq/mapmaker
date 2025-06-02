@@ -226,7 +226,7 @@
         <div id="map"></div>
         
         <!-- Блок погоды (сдвинут левее, чтобы не перекрываться) -->
-        <div id="weather-panel" style="position: absolute; right: 350px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
+        <div id="weather-panel" style="position: absolute; right: 300px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
             <div id="weather-box">
                 <div class="weather-header">
                     <span id="weather-icon">☀️</span>
@@ -278,9 +278,8 @@
                     <p>Расстояние: <span id="cultural-info-distance"></span> км</p>
                     <p>Время: <span id="cultural-info-time"></span> мин.</p>
                     <p>Тип маршрута: <span id="cultural-route-type">Культурный</span></p>
-                    <div class="route-summary"></div>
-                    <div class="route-points-list"></div>
                     <button id="save-cultural-route" class="neo-button success">Сохранить маршрут</button>
+                    <div id="cultural-route-description"></div>
                 </div>
             </div>
         </div>
@@ -1892,24 +1891,9 @@
             saveCulturalRouteButton.addEventListener('click', function() {
                 if (window.personalizationModule && window.culturalRouteLayer) {
                     try {
-                        // Получаем данные о маршруте из панели
-                        const routeSummary = document.querySelector('#route-info-panel .route-summary');
-                        let routeDistance = 0;
-                        let routeTime = 0;
-                        
-                        if (routeSummary) {
-                            // Извлекаем данные из текста элемента
-                            const distanceMatch = routeSummary.innerHTML.match(/Расстояние:<\/strong>\s*(\d+\.?\d*)/);
-                            if (distanceMatch && distanceMatch[1]) {
-                                routeDistance = parseFloat(distanceMatch[1]);
-                            }
-                            
-                            const timeMatch = routeSummary.innerHTML.match(/Время:<\/strong>\s*(\d+)/);
-                            if (timeMatch && timeMatch[1]) {
-                                routeTime = parseInt(timeMatch[1]);
-                            }
-                        }
-                        
+                        // Получаем данные о маршруте
+                        const distanceKm = document.getElementById('cultural-info-distance').textContent;
+                        const timeMin = document.getElementById('cultural-info-time').textContent;
                         const routeProfile = getCurrentProfile();
                         
                         // Получаем точки маршрута
@@ -1925,8 +1909,8 @@
                         
                         // Формируем данные маршрута
                         const currentRouteData = {
-                            distance: routeDistance,
-                            time: routeTime,
+                            distance: distanceKm,
+                            time: timeMin,
                             profile: routeProfile,
                             points: formattedPoints
                         };
@@ -1985,13 +1969,14 @@
                         console.log('Данные культурного маршрута для сохранения:', currentRouteData);
                         console.log('Данные культурных POI для сохранения:', currentPoisData);
                         
-                        // Вызываем функцию сохранения с поддержкой Promise
+                        // Вызываем функцию сохранения маршрута
                         window.personalizationModule.saveCurrentRoute(currentRouteData, currentPoisData)
+                            .then(() => {
+                                NeoDialog.alert('Успех', 'Культурный маршрут успешно сохранен');
+                            })
                             .catch(error => {
-                                if (error) {
-                                    console.error('Ошибка при сохранении культурного маршрута:', error);
-                                    NeoDialog.alert('Ошибка', `Ошибка при сохранении культурного маршрута: ${error.message}`);
-                                }
+                                console.error('Ошибка при сохранении культурного маршрута:', error);
+                                NeoDialog.alert('Ошибка', `Ошибка при сохранении культурного маршрута: ${error.message || 'Неизвестная ошибка'}`);
                             });
                     } catch (error) {
                         console.error('Ошибка при подготовке данных культурного маршрута:', error);

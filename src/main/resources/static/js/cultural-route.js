@@ -189,10 +189,9 @@ function displayCulturalRoute(routeData, points, profile) {
  */
 function updateCulturalRouteInfo(points, routePath) {
     const routeInfoPanel = document.getElementById('route-info-panel');
-    const routeSummary = document.querySelector('#route-info-panel .route-summary');
-    const routePointsList = document.querySelector('#route-info-panel .route-points-list');
+    const routeDescription = document.getElementById('cultural-route-description');
     
-    if (!routeInfoPanel || !routeSummary || !routePointsList) {
+    if (!routeInfoPanel || !routeDescription) {
         console.error('Не найдены элементы для отображения информации о маршруте');
         return;
     }
@@ -207,26 +206,22 @@ function updateCulturalRouteInfo(points, routePath) {
     if (culturalDistanceElement) culturalDistanceElement.textContent = distanceKm;
     if (culturalTimeElement) culturalTimeElement.textContent = timeMin;
     
-    // Информация о маршруте в блоке route-summary
-    routeSummary.innerHTML = `
-        <p><strong>Количество точек:</strong> ${points.length}</p>
-    `;
-    
-    // Список точек маршрута
-    let pointsHtml = '<h4>Точки маршрута:</h4><ol>';
+    // Список точек маршрута в том же формате, что и для тематического маршрута
+    let descriptionHtml = '<h4>Описание маршрута:</h4><ol>';
     
     points.forEach((point, index) => {
-        pointsHtml += `<li>
-            <strong>${point.name}</strong><br>
-            Тип: ${getReadableType(point.type)}<br>
-            Рейтинг: ${point.rating ? point.rating.toFixed(1) : 'Нет данных'}
-        </li>`;
+        let poiDescription = `<li><b>${point.name}</b> - ${getReadableType(point.type)}`;
+        if (point.rating) poiDescription += `, рейтинг: ${point.rating.toFixed(1)}`;
+        if (point.vicinity) poiDescription += `, район: ${point.vicinity}`;
+        if (point.address) poiDescription += `, адрес: ${point.address}`;
+        poiDescription += '</li>';
+        descriptionHtml += poiDescription;
     });
     
-    pointsHtml += '</ol>';
-    routePointsList.innerHTML = pointsHtml;
+    descriptionHtml += '</ol>';
+    routeDescription.innerHTML = descriptionHtml;
     
-    // Показываем панель культурного маршрута и скрываем обычный маршрут
+    // Показываем панель культурного маршрута и скрываем тематический маршрут
     if (typeof window.showCulturalRouteInfo === 'function') {
         window.showCulturalRouteInfo();
     } else {
