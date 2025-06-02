@@ -220,34 +220,13 @@
                 </div>
             </div>
         </div>
-
-        <div id="route-info" style="display: none;">
-            <h3>Информация о маршруте</h3>
-            <div class="neo-info-box">
-                <p>Расстояние: <span id="info-distance"></span> км</p>
-                <p>Время: <span id="info-time"></span> мин.</p>
-                <p>Тип маршрута: <span id="route-type">Стандартный</span></p>
-                <button id="save-route">Сохранить маршрут</button>
-                <div id="route-description"></div>
-            </div>
-        </div>
-        
-        <!-- Добавляем панель для отображения информации о культурном маршруте -->
-        <div id="route-info-panel" style="display: none;">
-            <h3>Культурный маршрут</h3>
-            <div class="neo-info-box">
-                <div class="route-summary"></div>
-                <div class="route-points-list"></div>
-                <button id="save-cultural-route" class="neo-button success">Сохранить маршрут</button>
-            </div>
-        </div>
     </div>
     
     <div id="map-container">
         <div id="map"></div>
         
-        <!-- Блок погоды (перемещен влево от тепловой карты) -->
-        <div id="weather-panel" style="position: absolute; left: 15px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
+        <!-- Блок погоды (сдвинут левее, чтобы не перекрываться) -->
+        <div id="weather-panel" style="position: absolute; right: 350px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
             <div id="weather-box">
                 <div class="weather-header">
                     <span id="weather-icon">☀️</span>
@@ -277,6 +256,32 @@
                     <option value="bank">Банки</option>
                     <option value="school">Школы</option>
                 </select>
+            </div>
+        </div>
+        
+        <!-- Блоки информации о маршрутах (под тепловой картой, сдвинуты ниже) -->
+        <div id="route-info-container" style="position: absolute; right: 15px; top: 350px; z-index: 1000; width: 300px;">
+            <div id="route-info" style="display: none; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); margin-bottom: 15px;">
+                <h3>Информация о маршруте</h3>
+                <div class="neo-info-box">
+                    <p>Расстояние: <span id="info-distance"></span> км</p>
+                    <p>Время: <span id="info-time"></span> мин.</p>
+                    <p>Тип маршрута: <span id="route-type">Стандартный</span></p>
+                    <button id="save-route" class="neo-button success">Сохранить маршрут</button>
+                    <div id="route-description"></div>
+                </div>
+            </div>
+            
+            <div id="route-info-panel" style="display: none; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
+                <h3>Культурный маршрут</h3>
+                <div class="neo-info-box">
+                    <p>Расстояние: <span id="cultural-info-distance"></span> км</p>
+                    <p>Время: <span id="cultural-info-time"></span> мин.</p>
+                    <p>Тип маршрута: <span id="cultural-route-type">Культурный</span></p>
+                    <div class="route-summary"></div>
+                    <div class="route-points-list"></div>
+                    <button id="save-cultural-route" class="neo-button success">Сохранить маршрут</button>
+                </div>
             </div>
         </div>
     </div>
@@ -795,13 +800,18 @@
             endPoint = null;
             
             // Скрываем информацию о маршруте
+            hideAllRouteInfo();
+            
+            console.log('Все точки и маршрут полностью сброшены');
+        }
+
+        // Функция для скрытия всех информационных панелей маршрутов
+        function hideAllRouteInfo() {
             const routeInfo = document.getElementById('route-info');
             if (routeInfo) routeInfo.style.display = 'none';
             
             const routeInfoPanel = document.getElementById('route-info-panel');
             if (routeInfoPanel) routeInfoPanel.style.display = 'none';
-            
-            console.log('Все точки и маршрут полностью сброшены');
         }
         
         // Сброс только маршрута, но сохранение точек А и Б
@@ -929,16 +939,38 @@
                 const distanceKm = (path.distance / 1000).toFixed(2);
                 const timeMin = Math.round(path.time / 1000 / 60);
                 
-                // Отображаем информацию
+                // Отображаем информацию о тематическом маршруте
                 infoDistance.textContent = distanceKm;
                 infoTime.textContent = timeMin;
-                routeInfo.style.display = 'block'; // Показываем панель информации о маршруте
+                
+                // Показываем панель информации о тематическом маршруте
+                showThematicRouteInfo();
 
                 console.log(`Маршрут построен: ${distanceKm} км, ${timeMin} мин.`);
             } else {
                 console.error("Ошибка: Не удалось получить данные маршрута или маршрут пуст.", routeData);
                 NeoDialog.alert("Ошибка", "Не удалось построить маршрут. Ответ API не содержит пути.");
             }
+        }
+
+        // Функция для отображения тематического маршрута и скрытия культурного
+        function showThematicRouteInfo() {
+            // Сначала скрываем все
+            hideAllRouteInfo();
+            
+            // Показываем только тематический маршрут
+            const routeInfo = document.getElementById('route-info');
+            if (routeInfo) routeInfo.style.display = 'block';
+        }
+
+        // Функция для отображения культурного маршрута и скрытия тематического
+        function showCulturalRouteInfo() {
+            // Сначала скрываем все
+            hideAllRouteInfo();
+            
+            // Показываем только культурный маршрут
+            const routeInfoPanel = document.getElementById('route-info-panel');
+            if (routeInfoPanel) routeInfoPanel.style.display = 'block';
         }
 
         // Запрос и отображение маршрута
@@ -1979,6 +2011,34 @@
                 }, 500); // Небольшая задержка для уверенности, что все элементы загружены
             }
         });
+
+        // Добавляем новые обработчики к кнопкам построения маршрутов
+        document.getElementById('cultural-route-button').addEventListener('click', function() {
+            // Сбрасываем тематический маршрут перед построением культурного
+            hideAllRouteInfo();
+            
+            // Продолжаем с построением культурного маршрута
+            if (typeof buildCulturalThematicRoute === 'function') {
+                buildCulturalThematicRoute();
+            } else {
+                console.error('Функция buildCulturalThematicRoute не найдена');
+                NeoDialog.alert('Ошибка', 'Функция построения культурного маршрута недоступна');
+            }
+        });
+
+        // Изменяем обработчик тематического маршрута
+        thematicRouteButton.addEventListener('click', function() {
+            // Сбрасываем культурный маршрут перед построением тематического
+            hideAllRouteInfo();
+            
+            // Вызываем функцию построения тематического маршрута
+            buildThematicRoute();
+        });
+
+        // Экспортируем функции для доступа из других скриптов
+        window.hideAllRouteInfo = hideAllRouteInfo;
+        window.showThematicRouteInfo = showThematicRouteInfo;
+        window.showCulturalRouteInfo = showCulturalRouteInfo;
     </script>
 </body>
 </html>

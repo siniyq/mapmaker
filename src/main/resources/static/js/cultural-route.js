@@ -197,13 +197,18 @@ function updateCulturalRouteInfo(points, routePath) {
         return;
     }
     
-    // Делаем панель видимой
-    routeInfoPanel.style.display = 'block';
+    // Обновляем информацию о расстоянии и времени
+    const distanceKm = (routePath.distance / 1000).toFixed(2);
+    const timeMin = Math.round(routePath.time / 1000 / 60);
     
-    // Информация о маршруте
+    const culturalDistanceElement = document.getElementById('cultural-info-distance');
+    const culturalTimeElement = document.getElementById('cultural-info-time');
+    
+    if (culturalDistanceElement) culturalDistanceElement.textContent = distanceKm;
+    if (culturalTimeElement) culturalTimeElement.textContent = timeMin;
+    
+    // Информация о маршруте в блоке route-summary
     routeSummary.innerHTML = `
-        <p><strong>Расстояние:</strong> ${(routePath.distance / 1000).toFixed(2)} км</p>
-        <p><strong>Время:</strong> ${Math.round(routePath.time / 1000 / 60)} мин.</p>
         <p><strong>Количество точек:</strong> ${points.length}</p>
     `;
     
@@ -221,53 +226,16 @@ function updateCulturalRouteInfo(points, routePath) {
     pointsHtml += '</ol>';
     routePointsList.innerHTML = pointsHtml;
     
-    // Добавляем обработчик для кнопки сохранения маршрута
-    const saveButton = document.getElementById('save-cultural-route');
-    if (saveButton) {
-        saveButton.onclick = function() {
-            if (window.personalizationModule) {
-                try {
-                    // Преобразуем точки маршрута в нужный формат
-                    const routePoints = window.culturalRouteLayer.getLatLngs();
-                    const formattedPoints = routePoints.map(latlng => [latlng.lat, latlng.lng]);
-                    
-                    // Передаем данные маршрута и точек интереса
-                    const routeData = {
-                        distance: (routePath.distance / 1000).toFixed(2),
-                        time: Math.round(routePath.time / 1000 / 60),
-                        profile: getCurrentProfile(),
-                        points: formattedPoints
-                    };
-                    
-                    // Собираем данные о точках интереса
-                    const poisData = points.map((point, index) => ({
-                        lat: point.latitude,
-                        lng: point.longitude,
-                        name: point.name,
-                        type: point.type,
-                        rating: point.rating,
-                        photoUrl: point.photoUrl
-                    }));
-                    
-                    console.log('Данные маршрута для сохранения:', routeData);
-                    console.log('Данные POI для сохранения:', poisData);
-                    
-                    // Используем обновленный метод saveCurrentRoute, который возвращает Promise
-                    window.personalizationModule.saveCurrentRoute(routeData, poisData)
-                        .catch(error => {
-                            if (error) {
-                                console.error('Ошибка при сохранении культурного маршрута:', error);
-                                NeoDialog.alert('Ошибка', `Ошибка при сохранении культурного маршрута: ${error.message}`);
-                            }
-                        });
-                } catch (error) {
-                    console.error('Ошибка при подготовке данных маршрута:', error);
-                    alert('Ошибка при подготовке данных маршрута: ' + error.message);
-                }
-            } else {
-                alert('Модуль персонализации не найден');
-            }
-        };
+    // Показываем панель культурного маршрута и скрываем обычный маршрут
+    if (typeof window.showCulturalRouteInfo === 'function') {
+        window.showCulturalRouteInfo();
+    } else {
+        // Скрываем панель информации о тематическом маршруте
+        const routeInfo = document.getElementById('route-info');
+        if (routeInfo) routeInfo.style.display = 'none';
+        
+        // Показываем панель культурного маршрута
+        routeInfoPanel.style.display = 'block';
     }
 }
 
@@ -370,6 +338,14 @@ function clearCulturalRoute() {
         map.removeLayer(marker);
     });
     window.culturalMarkers = [];
+    
+    // Скрываем панель информации о культурном маршруте
+    if (typeof window.hideAllRouteInfo === 'function') {
+        window.hideAllRouteInfo();
+    } else {
+        const routeInfoPanel = document.getElementById('route-info-panel');
+        if (routeInfoPanel) routeInfoPanel.style.display = 'none';
+    }
 }
 
 /**
@@ -605,10 +581,20 @@ function clearMap() {
         }
     }
     
-    // Скрываем панель информации о маршруте, если она существует
-    const routeInfoPanel = document.getElementById('route-info-panel');
-    if (routeInfoPanel) {
-        routeInfoPanel.style.display = 'none';
+    // Скрываем все панели информации о маршрутах
+    if (typeof window.hideAllRouteInfo === 'function') {
+        window.hideAllRouteInfo();
+    } else {
+        // Скрываем панель информации о маршруте, если она существует
+        const routeInfoPanel = document.getElementById('route-info-panel');
+        if (routeInfoPanel) {
+            routeInfoPanel.style.display = 'none';
+        }
+        
+        const routeInfo = document.getElementById('route-info');
+        if (routeInfo) {
+            routeInfo.style.display = 'none';
+        }
     }
 }
 
