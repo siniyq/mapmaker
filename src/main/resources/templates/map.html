@@ -1,0 +1,1985 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Маршруты (Витебск)</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
+    <link rel="stylesheet" href="/css/styles.css">
+    <script src="/js/heatmap.js" defer></script>
+    <script src="/js/thematic-route.js" defer></script>
+    <script src="/js/cultural-route.js" defer></script>
+    <script src="/js/personalization.js" defer></script>
+    <script src="/js/auth.js" defer></script>
+</head>
+<body>
+    <div id="control-panel">
+        <div class="theme-switcher">
+            <button id="theme-toggle" class="neo-button" style="display: flex; align-items: center; justify-content: center; margin-bottom: 20px; width: 100%;">
+                <span id="theme-icon">🌙</span>
+                <span id="theme-text" style="margin-left: 8px;">Темная тема</span>
+            </button>
+        </div>
+
+        <h3>Профиль пользователя</h3>
+        <div id="profile-container">
+            <div id="auth-container">
+                <button id="login-button" class="neo-button" onclick="window.location.href='/login'">Вход / Регистрация</button>
+                <p style="font-size: 0.85em; margin-top: 5px; color: #666; text-align: center;">Регистрация необязательна для просмотра карты и построения маршрутов</p>
+            </div>
+            <div id="user-profile" style="display: none;">
+                <p class="user-greeting">Привет, <span id="user-name">Пользователь</span>!</p>
+                <div class="profile-buttons">
+                    <button id="saved-routes" class="neo-button">Сохраненные маршруты</button>
+                    <button id="preferences" class="neo-button">Предпочтения</button>
+                    <button id="logout-btn" onclick="logout();" class="neo-button danger">Выход</button>
+                </div>
+            </div>
+            
+            <script>
+                // Добавляем обработчик для кнопки "Сохраненные маршруты"
+                document.getElementById('saved-routes').addEventListener('click', function() {
+                    if (window.personalizationModule) {
+                        window.personalizationModule.showSavedRoutes();
+                    } else {
+                        NeoDialog.alert('Ошибка', 'Модуль персонализации не загружен');
+                    }
+                });
+                
+                function logout() {
+                    console.log('Выполняется выход из системы...');
+                    
+                    // Удаляем данные пользователя из localStorage
+                    localStorage.removeItem('userData');
+                    
+                    // Обновляем интерфейс напрямую без использования функций
+                    const authContainer = document.getElementById('auth-container');
+                    const userProfile = document.getElementById('user-profile');
+                    
+                    if (authContainer) {
+                        authContainer.style.display = 'block';
+                        console.log('Контейнер авторизации показан');
+                    } else {
+                        console.log('Контейнер авторизации не найден');
+                    }
+                    
+                    if (userProfile) {
+                        userProfile.style.display = 'none';
+                        console.log('Профиль пользователя скрыт');
+                    } else {
+                        console.log('Профиль пользователя не найден');
+                    }
+                    
+                    // Обновляем статус в модуле персонализации
+                    if (window.personalizationModule) {
+                        window.personalizationModule.isAuthenticated = false;
+                        window.personalizationModule.userProfile = null;
+                        console.log('Модуль персонализации обновлен');
+                    }
+                    
+                    // Показываем уведомление
+                    NeoDialog.alert('Уведомление', 'Вы вышли из системы');
+                    
+                    // Перезагружаем страницу для сброса всех состояний
+                    // window.location.reload();
+                    
+                    // По желанию - можно сделать запрос на сервер для завершения сессии
+                    fetch('/api/users/logout', { method: 'POST' })
+                        .then(response => console.log('Серверная сессия завершена'))
+                        .catch(error => console.error('Ошибка при выходе из системы:', error));
+                }
+            </script>
+        </div>
+
+        <h3>Построение маршрута</h3>
+        <p class="neo-note">Кликните на карту, чтобы выбрать точку А, затем точку Б.</p>
+        
+        <h3>Транспорт</h3>
+        <div id="profile-buttons">
+            <button id="profile-foot" class="neo-button active">Пешком</button>
+            <button id="profile-bike" class="neo-button">Велосипед</button>
+            <button id="profile-car" class="neo-button">Автомобиль</button>
+        </div>
+            
+        <button id="reset-button" class="neo-button">Сбросить точки</button>
+        
+        <h3>Тематический маршрут</h3>
+        <p class="neo-note">Выберите тип точек интереса:</p>
+        
+        <!-- Добавляем переключатель категорий POI -->
+        <div class="neo-tabs-container">
+            <div class="neo-tabs">
+                <button id="category-food" class="neo-tab active">Еда</button>
+                <button id="category-cultural" class="neo-tab">Культура</button>
+            </div>
+        </div>
+        
+        <!-- Категория Еда -->
+        <div id="poi-food-buttons" class="poi-category active">
+            <div class="poi-buttons-grid">
+                <button id="poi-restaurant" class="neo-button">Рестораны</button>
+                <button id="poi-cafe" class="neo-button">Кафе</button>
+                <button id="poi-bar" class="neo-button">Бары</button>
+            </div>
+        </div>
+        
+        <!-- Категория Культура -->
+        <div id="poi-cultural-buttons" class="poi-category">
+            <!-- Удаляем кнопки и сетку -->
+            
+            <!-- Блок Культурный маршрут -->
+            <div class="cultural-route-block">
+                <p class="neo-note">Маршрут по культурным местам Витебска</p>
+                
+                <div class="neo-options-group">
+                    <div class="neo-checkbox-group">
+                        <input type="checkbox" id="include-museum" checked>
+                        <label for="include-museum">Включить музей</label>
+                    </div>
+                    <div class="neo-checkbox-group">
+                        <input type="checkbox" id="include-park" checked>
+                        <label for="include-park">Включить парк</label>
+                    </div>
+                    
+                    <label>Дополнительные типы мест:</label>
+                    <div class="neo-checkbox-list">
+                        <div class="neo-checkbox-group">
+                            <input type="checkbox" id="include-theater" class="cultural-type-checkbox" value="theater" checked>
+                            <label for="include-theater">Театры</label>
+                        </div>
+                        <div class="neo-checkbox-group">
+                            <input type="checkbox" id="include-church" class="cultural-type-checkbox" value="church" checked>
+                            <label for="include-church">Церкви/Соборы</label>
+                        </div>
+                        <div class="neo-checkbox-group">
+                            <input type="checkbox" id="include-art-gallery" class="cultural-type-checkbox" value="art_gallery" checked>
+                            <label for="include-art-gallery">Галереи</label>
+                        </div>
+                        <div class="neo-checkbox-group">
+                            <input type="checkbox" id="include-library" class="cultural-type-checkbox" value="library" checked>
+                            <label for="include-library">Библиотеки</label>
+                        </div>
+                        <div class="neo-checkbox-group">
+                            <input type="checkbox" id="include-attraction" class="cultural-type-checkbox" value="tourist_attraction" checked>
+                            <label for="include-attraction">Достопримечательности</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="neo-slider">
+                    <label for="cultural-poi-count">Количество точек (3-7):</label>
+                    <div class="slider-container">
+                        <input type="range" id="cultural-poi-count" min="3" max="7" value="4">
+                        <span id="cultural-poi-count-value">4</span>
+                    </div>
+                </div>
+                
+                <button id="cultural-route-button" class="neo-button">Построить культурный маршрут</button>
+            </div>
+        </div>
+        
+        <button id="thematic-route-button" class="neo-button">Построить тематический маршрут</button>
+        <button id="shuffle-poi-button" class="neo-button">Перемешать точки</button>
+        <button id="optimize-route-button" class="neo-button">Оптимизировать маршрут</button>
+
+        <div class="neo-slider">
+            <label for="poi-count-slider">Количество точек (3-10):</label>
+            <div class="slider-container">
+                <input type="range" id="poi-count-slider" min="3" max="10" value="5">
+                <span id="poi-count-value">5</span>
+            </div>
+            <p class="neo-note">
+              Тематический маршрут проходит через несколько интересных мест выбранного типа. 
+              С помощью слайдера можно указать количество точек на маршруте.
+            </p>
+        </div>
+
+        <h3>Время и темп маршрута</h3>
+        <div class="neo-options-group">
+            <label for="route-duration">Длительность маршрута:</label>
+            <select id="route-duration">
+                <option value="30">30 минут</option>
+                <option value="60" selected>1 час</option>
+                <option value="120">2 часа</option>
+                <option value="0">Без ограничений</option>
+            </select>
+            
+            <div class="neo-radio-group">
+                <label>Темп маршрута:</label>
+                <div class="neo-radio-options">
+                    <label class="neo-radio">
+                        <input type="radio" name="route-pace" value="relaxed" checked>
+                        <span class="radio-label">Размеренный</span>
+                    </label>
+                    <label class="neo-radio">
+                        <input type="radio" name="route-pace" value="active">
+                        <span class="radio-label">Активный</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div id="route-info" style="display: none;">
+            <h3>Информация о маршруте</h3>
+            <div class="neo-info-box">
+                <p>Расстояние: <span id="info-distance"></span> км</p>
+                <p>Время: <span id="info-time"></span> мин.</p>
+                <p>Тип маршрута: <span id="route-type">Стандартный</span></p>
+                <button id="save-route">Сохранить маршрут</button>
+                <div id="route-description"></div>
+            </div>
+        </div>
+        
+        <!-- Добавляем панель для отображения информации о культурном маршруте -->
+        <div id="route-info-panel" style="display: none;">
+            <h3>Культурный маршрут</h3>
+            <div class="neo-info-box">
+                <div class="route-summary"></div>
+                <div class="route-points-list"></div>
+                <button id="save-cultural-route" class="neo-button success">Сохранить маршрут</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="map-container">
+        <div id="map"></div>
+        
+        <!-- Блок погоды (перемещен влево от тепловой карты) -->
+        <div id="weather-panel" style="position: absolute; left: 15px; top: 15px; z-index: 1000; padding: 10px; border-radius: 10px; background-color: var(--background); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);">
+            <div id="weather-box">
+                <div class="weather-header">
+                    <span id="weather-icon">☀️</span>
+                    <span id="weather-temp">Загрузка погоды...</span>
+                </div>
+                <div id="weather-description"></div>
+                <div id="weather-recommendation"></div>
+            </div>
+        </div>
+        
+        <!-- Панель тепловой карты (справа) -->
+        <div id="heatmap-panel">
+            <h3>Тепловая карта</h3>
+            <p style="font-size: 0.85em; margin-bottom: 10px; color: #666;">Отображение данных на тепловой карте:</p>
+            <div>
+                <button id="heatmap-rating-button" class="neo-button">По рейтингу</button>
+                <button id="heatmap-density-button" class="neo-button">По плотности</button>
+                <button id="heatmap-clear-button" class="neo-button">Очистить</button>
+            </div>
+            <div style="margin-top: 10px;">
+                <select id="heatmap-type">
+                    <option value="restaurant">Рестораны</option>
+                    <option value="cafe">Кафе</option>
+                    <option value="bar">Бары</option>
+                    <option value="gym">Спортзалы</option>
+                    <option value="pharmacy">Аптеки</option>
+                    <option value="bank">Банки</option>
+                    <option value="school">Школы</option>
+                </select>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Контейнер для модальных диалогов -->
+    <div id="neo-dialog-overlay" class="neo-dialog-overlay">
+        <div id="neo-dialog" class="neo-dialog"></div>
+    </div>
+    
+    <script>
+        // Утилиты для работы с модальными окнами
+        const NeoDialog = {
+            overlay: document.getElementById('neo-dialog-overlay'),
+            dialog: document.getElementById('neo-dialog'),
+            
+            // Показ alert-диалога
+            alert: function(title, message, callback = null) {
+                const content = `
+                    <div class="neo-dialog-header">
+                        <h3 class="neo-dialog-title">${title}</h3>
+                    </div>
+                    <div class="neo-dialog-content">${message}</div>
+                    <div class="neo-dialog-buttons">
+                        <button class="primary" id="neo-dialog-ok">ОК</button>
+                    </div>
+                `;
+                
+                this.dialog.innerHTML = content;
+                this.overlay.classList.add('active');
+                
+                const okButton = document.getElementById('neo-dialog-ok');
+                if (okButton) {
+                    okButton.onclick = () => {
+                        this.close();
+                        if (callback) callback(true);
+                    };
+                    
+                    // Фокус на кнопке
+                    setTimeout(() => okButton.focus(), 100);
+                }
+                
+                // Обработчик Esc для закрытия
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        this.close();
+                        if (callback) callback(true);
+                        document.removeEventListener('keydown', escHandler);
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
+            },
+            
+            // Показ confirm-диалога
+            confirm: function(title, message, callback) {
+                const content = `
+                    <div class="neo-dialog-header">
+                        <h3 class="neo-dialog-title">${title}</h3>
+                    </div>
+                    <div class="neo-dialog-content">${message}</div>
+                    <div class="neo-dialog-buttons">
+                        <button class="secondary" id="neo-dialog-cancel">Отмена</button>
+                        <button class="primary" id="neo-dialog-confirm">Подтвердить</button>
+                    </div>
+                `;
+                
+                this.dialog.innerHTML = content;
+                this.overlay.classList.add('active');
+                
+                const cancelButton = document.getElementById('neo-dialog-cancel');
+                const confirmButton = document.getElementById('neo-dialog-confirm');
+                
+                // Очистка обработчиков при закрытии
+                const clearHandlers = () => {
+                    if (cancelButton) cancelButton.onclick = null;
+                    if (confirmButton) confirmButton.onclick = null;
+                    document.removeEventListener('keydown', escHandler);
+                };
+                
+                if (cancelButton) {
+                    cancelButton.onclick = () => {
+                        clearHandlers();
+                        this.close();
+                        callback(false);
+                    };
+                }
+                
+                if (confirmButton) {
+                    confirmButton.onclick = () => {
+                        clearHandlers();
+                        this.close();
+                        callback(true);
+                    };
+                    
+                    // Фокус на кнопке подтверждения
+                    setTimeout(() => confirmButton.focus(), 100);
+                }
+                
+                // Обработчик Esc для закрытия
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        clearHandlers();
+                        this.close();
+                        callback(false);
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
+            },
+            
+            // Показ prompt-диалога
+            prompt: function(title, message, defaultValue = '', callback) {
+                const content = `
+                    <div class="neo-dialog-header">
+                        <h3 class="neo-dialog-title">${title}</h3>
+                    </div>
+                    <div class="neo-dialog-content">
+                        ${message}
+                        <div class="neo-input-group">
+                            <input type="text" id="neo-dialog-input" class="neo-input" value="${defaultValue}">
+                        </div>
+                    </div>
+                    <div class="neo-dialog-buttons">
+                        <button class="secondary" id="neo-dialog-cancel">Отмена</button>
+                        <button class="primary" id="neo-dialog-confirm">Подтвердить</button>
+                    </div>
+                `;
+                
+                this.dialog.innerHTML = content;
+                this.overlay.classList.add('active');
+                
+                const inputEl = document.getElementById('neo-dialog-input');
+                const cancelButton = document.getElementById('neo-dialog-cancel');
+                const confirmButton = document.getElementById('neo-dialog-confirm');
+                
+                // Очистка обработчиков при закрытии
+                const clearHandlers = () => {
+                    if (inputEl) inputEl.onkeydown = null;
+                    if (cancelButton) cancelButton.onclick = null;
+                    if (confirmButton) confirmButton.onclick = null;
+                    document.removeEventListener('keydown', escHandler);
+                };
+                
+                if (inputEl) {
+                    setTimeout(() => inputEl.focus(), 100);
+                    
+                    inputEl.onkeydown = (e) => {
+                        if (e.key === 'Enter') {
+                            clearHandlers();
+                            this.close();
+                            callback(inputEl.value);
+                        }
+                    };
+                }
+                
+                if (cancelButton) {
+                    cancelButton.onclick = () => {
+                        clearHandlers();
+                        this.close();
+                        callback(null);
+                    };
+                }
+                
+                if (confirmButton) {
+                    confirmButton.onclick = () => {
+                        clearHandlers();
+                        this.close();
+                        callback(inputEl ? inputEl.value : null);
+                    };
+                }
+                
+                // Обработчик Esc для закрытия
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        clearHandlers();
+                        this.close();
+                        callback(null);
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
+            },
+            
+            // Закрытие диалога
+            close: function() {
+                this.overlay.classList.remove('active');
+                
+                // Задержка для анимации
+                setTimeout(() => {
+                    // Полная очистка содержимого
+                    if (this.dialog) {
+                        // Удаляем все обработчики событий с элементов внутри диалога
+                        const buttons = this.dialog.querySelectorAll('button');
+                        buttons.forEach(button => {
+                            button.onclick = null;
+                        });
+                        
+                        const inputs = this.dialog.querySelectorAll('input');
+                        inputs.forEach(input => {
+                            input.onkeydown = null;
+                        });
+                        
+                        // Очищаем HTML
+                        this.dialog.innerHTML = '';
+                        
+                        // Проверяем наличие других модальных окон
+                        const activeModals = document.querySelectorAll('.neo-modal-container.active, .neo-dialog-overlay.active');
+                        console.log(`Активных модальных окон: ${activeModals.length}`);
+                        
+                        // Удаляем все "зависшие" пустые диалоги
+                        const emptyDialogs = document.querySelectorAll('.neo-dialog:empty');
+                        emptyDialogs.forEach(dialog => {
+                            const overlay = dialog.closest('.neo-dialog-overlay');
+                            if (overlay) {
+                                overlay.classList.remove('active');
+                                console.log('Удален зависший пустой диалог');
+                            }
+                        });
+                    }
+                }, 300);
+            }
+        };
+        
+        // Замена стандартных диалогов на неоморфные
+        window.originalAlert = window.alert;
+        window.alert = function(message) {
+            NeoDialog.alert('Внимание', message);
+        };
+        
+        window.originalConfirm = window.confirm;
+        window.confirm = function(message) {
+            // Используем Promise для синхронного поведения
+            return new Promise(resolve => {
+                NeoDialog.confirm('Подтверждение', message, result => {
+                    resolve(result);
+                });
+            });
+        };
+        
+        window.originalPrompt = window.prompt;
+        window.prompt = function(message, defaultValue = '') {
+            return new Promise(resolve => {
+                NeoDialog.prompt('Ввод данных', message, defaultValue, result => {
+                    resolve(result);
+                });
+            });
+        };
+        
+        // Theme switcher
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            const themeIcon = document.getElementById('theme-icon');
+            const themeText = document.getElementById('theme-text');
+            
+            // Check if user has a theme preference in localStorage
+            const savedTheme = localStorage.getItem('mapmaker-theme');
+            if (savedTheme === 'dark') {
+                document.body.classList.add('dark-theme');
+                themeIcon.textContent = '☀️';
+                themeText.textContent = 'Светлая тема';
+            }
+            
+            // Toggle theme
+            themeToggle.addEventListener('click', function() {
+                if (document.body.classList.contains('dark-theme')) {
+                    // Switch to light theme
+                    document.body.classList.remove('dark-theme');
+                    themeIcon.textContent = '☀️';
+                    themeText.textContent = 'Светлая тема';
+                    localStorage.setItem('mapmaker-theme', 'light');
+                    setMapStyle(false); // Устанавливаем светлую карту
+                } else {
+                    // Switch to dark theme
+                    document.body.classList.add('dark-theme');
+                    themeIcon.textContent = '☀️';
+                    themeText.textContent = 'Светлая тема';
+                    localStorage.setItem('mapmaker-theme', 'dark');
+                    setMapStyle(true); // Устанавливаем темную карту
+                }
+            });
+        });
+
+        // Проверяем, авторизован ли пользователь
+        document.addEventListener('DOMContentLoaded', function() {
+            // Всегда проверяем статус авторизации при загрузке страницы
+            checkAuthStatus();
+            
+            // Проверяем каждую секунду, не изменился ли статус авторизации
+            setInterval(checkAuthStatus, 1000);
+            
+            // Добавляем прослушиватели событий для остановки распространения кликов
+            const heatmapButtons = document.querySelectorAll('#heatmap-panel button, #heatmap-panel select');
+            heatmapButtons.forEach(button => {
+                button.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                });
+            });
+            
+            // Проверяем активную категорию при загрузке страницы и скрываем/показываем элементы соответственно
+            if (document.getElementById('category-cultural').classList.contains('active')) {
+                // Если активна категория "Культура", скрываем элементы тематического маршрута
+                hideThematicRouteElements();
+            } else {
+                // Иначе показываем элементы
+                showThematicRouteElements();
+            }
+        });
+        
+        // Добавляем глобальную функцию для отладки состояния авторизации
+        window.debugAuth = function() {
+            const userDataStr = localStorage.getItem('userData');
+            console.log('Debug - userData в localStorage:', userDataStr);
+            
+            const authContainer = document.getElementById('auth-container');
+            console.log('Debug - authContainer:', authContainer);
+            console.log('Debug - authContainer display:', authContainer ? authContainer.style.display : 'element not found');
+            
+            const userProfile = document.getElementById('user-profile');
+            console.log('Debug - userProfile:', userProfile);
+            console.log('Debug - userProfile display:', userProfile ? userProfile.style.display : 'element not found');
+            
+            const userName = document.getElementById('user-name');
+            console.log('Debug - userName:', userName);
+            console.log('Debug - userName content:', userName ? userName.textContent : 'element not found');
+            
+            console.log('Debug - isAuthenticated:', window.personalizationModule ? window.personalizationModule.isAuthenticated : 'module not found');
+        }
+        
+        // Функция проверки статуса авторизации
+        function checkAuthStatus() {
+            console.log('Выполняется проверка статуса авторизации...');
+            
+            // Проверяем localStorage на наличие данных пользователя
+            const userDataStr = localStorage.getItem('userData');
+            
+            const authContainer = document.getElementById('auth-container');
+            const userProfile = document.getElementById('user-profile');
+            const userName = document.getElementById('user-name');
+            
+            if (userDataStr) {
+                try {
+                    const userData = JSON.parse(userDataStr);
+                    
+                    // Если данные о пользователе найдены, показываем профиль
+                    if (authContainer) {
+                        authContainer.style.display = 'none';
+                    }
+                    
+                    if (userProfile) {
+                        userProfile.style.display = 'block';
+                    }
+                    
+                    if (userName) {
+                        // Используем имя или фамилию, если они есть, иначе имя пользователя
+                        let displayName = userData.username || 'Пользователь';
+                        if (userData.firstName && userData.firstName.trim() !== '') {
+                            displayName = userData.firstName;
+                            if (userData.lastName && userData.lastName.trim() !== '') {
+                                displayName += ' ' + userData.lastName;
+                            }
+                        }
+                        userName.textContent = displayName;
+                        userName.style.fontWeight = 'bold';
+                        userName.style.color = '#4285f4';
+                    }
+                    
+                    console.log('Пользователь авторизован:', userData.username);
+                    
+                    // Устанавливаем статус авторизации для personalizationModule
+                    if (window.personalizationModule) {
+                        window.personalizationModule.isAuthenticated = true;
+                        window.personalizationModule.userProfile = userData;
+                    }
+                    
+                    return true;
+                } catch (e) {
+                    console.error('Ошибка при загрузке данных пользователя:', e);
+                    localStorage.removeItem('userData'); // Удаляем поврежденные данные
+                }
+            }
+            
+            // Если данные о пользователе не найдены или произошла ошибка, показываем форму логина
+            if (authContainer) {
+                authContainer.style.display = 'block';
+            }
+            
+            if (userProfile) {
+                userProfile.style.display = 'none';
+            }
+            
+            return false;
+        }
+        
+        const map = L.map('map-container').setView([55.19, 30.20], 13);
+        let routeLayer = null; // Слой для хранения текущего маршрута
+        let startMarker = null;
+        let endMarker = null;
+        let startPoint = null; // {lat, lng}
+        let endPoint = null;   // {lat, lng}
+        let currentProfile = 'foot'; // Текущий выбранный профиль
+        let currentPoiType = 'restaurant'; // Тип точек интереса по умолчанию
+        let poiMarkers = []; // Массив маркеров POI для тематических маршрутов
+        let currentPois = [];
+        let selectedPoisIndexes = new Set();
+        let tileLayer; // Объявляем переменную для слоя карты
+
+        // Стили карт
+        const lightMapUrl = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
+        const darkMapUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+        // Функция для установки стиля карты в зависимости от темы
+        function setMapStyle(isDark) {
+            if (tileLayer) {
+                map.removeLayer(tileLayer);
+            }
+            
+            const mapUrl = isDark ? darkMapUrl : lightMapUrl;
+            const attribution = isDark 
+                ? '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                : '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
+                
+            tileLayer = L.tileLayer(mapUrl, {
+                maxZoom: 19,
+                attribution: attribution
+            }).addTo(map);
+        }
+        
+        // Проверяем тему в localStorage и устанавливаем соответствующий стиль карты
+        const savedTheme = localStorage.getItem('mapmaker-theme');
+        setMapStyle(savedTheme === 'dark');
+
+        // --- Элементы UI --- 
+        const routeInfoPanel = document.getElementById('route-info-panel');
+        const routeSummary = document.querySelector('#route-info-panel .route-summary');
+        const routePointsList = document.querySelector('#route-info-panel .route-points-list');
+        const saveCulturalRouteButton = document.getElementById('save-cultural-route');
+        const routeInfo = document.getElementById('route-info');
+        const infoDistance = document.getElementById('info-distance');
+        const infoTime = document.getElementById('info-time');
+        const routeDescription = document.getElementById('route-description');
+        const profileButtons = document.getElementById('profile-buttons');
+        const resetButton = document.getElementById('reset-button');
+        const poiButtons = document.getElementById('poi-buttons');
+        const thematicRouteButton = document.getElementById('thematic-route-button');
+        const poiCountSlider = document.getElementById('poi-count-slider');
+        const poiCountValue = document.getElementById('poi-count-value');
+        const shufflePoiButton = document.getElementById('shuffle-poi-button');
+        const saveRouteButton = document.getElementById('save-route');
+
+        // --- Функции ----
+
+        // Очистка карты от маршрута и маркеров
+        function clearMap() {
+            console.log('Вызвана функция clearMap()');
+            
+            // Удаляем слой маршрута, если он существует
+            if (routeLayer) {
+                console.log('Удаляю слой маршрута');
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            
+            // Очищаем POI маркеры
+            clearPoiMarkers();
+            
+            // Дополнительно очищаем культурный маршрут
+            if (typeof clearCulturalRoute === 'function') {
+                clearCulturalRoute();
+            }
+            
+            // Очищаем все тепловые карты, если они есть
+            if (window.heatmapLayer && typeof window.heatmapLayer.remove === 'function') {
+                window.heatmapLayer.remove();
+                window.heatmapLayer = null;
+            }
+            
+            // Скрываем панели с информацией о маршруте
+            const routeInfoPanel = document.getElementById('route-info-panel');
+            if (routeInfoPanel) routeInfoPanel.style.display = 'none';
+            
+            const routeInfo = document.getElementById('route-info');
+            if (routeInfo) routeInfo.style.display = 'none';
+            
+            console.log('Карта очищена от маршрута и маркеров');
+        }
+        
+        // Очистка маркеров POI
+        function clearPoiMarkers() {
+            poiMarkers.forEach(marker => map.removeLayer(marker));
+            poiMarkers = [];
+        }
+
+        // Полный сброс маршрута и всех точек 
+        function fullResetPoints() {
+            console.log('Вызвана функция fullResetPoints() для полного сброса');
+            
+            // Удаляем маркеры, если они существуют
+            if (startMarker) {
+                map.removeLayer(startMarker);
+                startMarker = null;
+            }
+            
+            if (endMarker) {
+                map.removeLayer(endMarker);
+                endMarker = null;
+            }
+            
+            // Удаляем маршрут
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            
+            // Очищаем POI маркеры
+            clearPoiMarkers();
+            
+            // Сбрасываем точки А и Б
+            startPoint = null;
+            endPoint = null;
+            
+            // Скрываем информацию о маршруте
+            const routeInfo = document.getElementById('route-info');
+            if (routeInfo) routeInfo.style.display = 'none';
+            
+            const routeInfoPanel = document.getElementById('route-info-panel');
+            if (routeInfoPanel) routeInfoPanel.style.display = 'none';
+            
+            console.log('Все точки и маршрут полностью сброшены');
+        }
+        
+        // Сброс только маршрута, но сохранение точек А и Б
+        function resetPoints() {
+            clearMap();
+            
+            // Если точки А и Б существуют, восстанавливаем их маркеры
+            if (startPoint) {
+                if (!startMarker) {
+                    startMarker = L.marker([startPoint.lat, startPoint.lng], {
+                        icon: L.divIcon({className: 'route-marker-start', html: 'A', iconSize: [24, 24], iconAnchor: [12, 24]})
+                    }).addTo(map);
+                }
+            }
+            
+            if (endPoint) {
+                if (!endMarker) {
+                    endMarker = L.marker([endPoint.lat, endPoint.lng], {
+                        icon: L.divIcon({className: 'route-marker-end', html: 'B', iconSize: [24, 24], iconAnchor: [12, 24]})
+                    }).addTo(map);
+                }
+                
+                // Удаляем автоматическое построение маршрута при сбросе
+                // Если пользователь хочет перестроить маршрут, он может сделать это сам
+            }
+             
+            console.log('Маршрут сброшен, точки сохранены.');
+        }
+        
+        // Отображение маршрута
+        function displayRoute(routeData, poiData) {
+            console.log('Вызвана функция displayRoute для отображения маршрута');
+            
+            // Удаляем предыдущий маршрут, если он существует
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            
+            // Очищаем POI маркеры
+            clearPoiMarkers();
+
+            if (routeData && routeData.paths && routeData.paths.length > 0) {
+                const path = routeData.paths[0];
+                const coordinates = path.points.coordinates;
+                const latLngs = coordinates.map(coord => [coord[1], coord[0]]);
+
+                // Создаем полилинию маршрута с цветом в зависимости от профиля
+                routeLayer = L.polyline(latLngs, { 
+                    color: getRouteColor(currentProfile), 
+                    weight: 4,
+                    opacity: 0.8
+                }).addTo(map);
+                
+                console.log(`Создан слой маршрута с ${latLngs.length} точками`);
+                
+                // Если есть данные о точках интереса, добавляем их как маркеры
+                if (poiData && poiData.length > 0) {
+                    console.log(`Добавление ${poiData.length} точек интереса`);
+                    poiData.forEach((poi, index) => {
+                        const marker = L.marker([poi.latitude, poi.longitude], {
+                            icon: L.divIcon({
+                                className: 'route-marker-poi',
+                                html: `<div style="
+                                    width: 24px;
+                                    height: 24px;
+                                    border-radius: 50%;
+                                    background-color: #2196F3;
+                                    color: white;
+                                    display: flex;
+                                    justify-content: center;
+                                    align-items: center;
+                                    font-weight: bold;
+                                    border: 2px solid white;
+                                    box-shadow: 0 0 4px rgba(0,0,0,0.5);">${index + 1}</div>`,
+                                iconSize: [24, 24],
+                                iconAnchor: [12, 12]
+                            })
+                        }).addTo(map);
+                        
+                        // Добавляем всю доступную информацию в попап
+                        let popupContent = `<b>${poi.name}</b>`;
+                        if (poi.rating) popupContent += `<br>Рейтинг: ${poi.rating}`;
+                        if (poi.address) popupContent += `<br>Адрес: ${poi.address}`;
+                        if (poi.vicinity) popupContent += `<br>Район: ${poi.vicinity}`;
+                        
+                        // Добавляем фотографию, если она доступна
+                        if (poi.photoUrl) {
+                            popupContent += `<br><img src="${poi.photoUrl}" alt="${poi.name}" style="max-width: 200px; max-height: 150px; margin-top: 5px; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">`;
+                        }
+                        
+                        marker.bindPopup(popupContent);
+                        poiMarkers.push(marker);
+                    });
+
+                    // Добавляем описание маршрута
+                    let descriptionHtml = '<h4>Описание маршрута:</h4><ol>';
+                    poiData.forEach((poi, index) => {
+                        let poiDescription = `<li><b>${poi.name}</b> - ${poi.type}`;
+                        if (poi.rating) poiDescription += `, рейтинг: ${poi.rating}`;
+                        if (poi.vicinity) poiDescription += `, район: ${poi.vicinity}`;
+                        if (poi.address) poiDescription += `, адрес: ${poi.address}`;
+                        poiDescription += '</li>';
+                        descriptionHtml += poiDescription;
+                    });
+                    descriptionHtml += '</ol>';
+                    routeDescription.innerHTML = descriptionHtml;
+                }
+                
+                // Создаем маркеры начала и конца маршрута только если они не существуют
+                if (!startMarker) {
+                    startMarker = L.marker(latLngs[0], {
+                        icon: L.divIcon({className: 'route-marker-start', html: 'A', iconSize: [24, 24], iconAnchor: [12, 24]})
+                    }).addTo(map);
+                }
+                
+                if (!endMarker) {
+                    endMarker = L.marker(latLngs[latLngs.length - 1], {
+                        icon: L.divIcon({className: 'route-marker-end', html: 'B', iconSize: [24, 24], iconAnchor: [12, 24]})
+                    }).addTo(map);
+                }
+
+                map.fitBounds(routeLayer.getBounds());
+
+                const distanceKm = (path.distance / 1000).toFixed(2);
+                const timeMin = Math.round(path.time / 1000 / 60);
+                
+                // Отображаем информацию
+                infoDistance.textContent = distanceKm;
+                infoTime.textContent = timeMin;
+                routeInfo.style.display = 'block'; // Показываем панель информации о маршруте
+
+                console.log(`Маршрут построен: ${distanceKm} км, ${timeMin} мин.`);
+            } else {
+                console.error("Ошибка: Не удалось получить данные маршрута или маршрут пуст.", routeData);
+                NeoDialog.alert("Ошибка", "Не удалось построить маршрут. Ответ API не содержит пути.");
+            }
+        }
+
+        // Запрос и отображение маршрута
+        function getAndDisplayRoute(startLat, startLon, endLat, endLon, profile) {
+            console.log(`Запрос маршрута: A(${startLat},${startLon}) -> B(${endLat},${endLon}), Профиль: ${profile}`);
+            
+            // Показываем индикатор загрузки
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.id = 'route-loading';
+            loadingIndicator.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: rgba(0, 0, 0, 0.7);
+                color: white;
+                padding: 15px;
+                border-radius: 10px;
+                z-index: 1000;
+            `;
+            loadingIndicator.innerHTML = 'Создание маршрута...';
+            document.body.appendChild(loadingIndicator);
+            
+            fetch(`/api/route?startLat=${startLat}&startLon=${startLon}&endLat=${endLat}&endLon=${endLon}&profile=${profile}`)
+                .then(response => {
+                    if (!response.ok) {
+                        // Попробуем прочитать тело ошибки, если оно есть
+                        return response.text().then(text => { 
+                            throw new Error(`HTTP error! status: ${response.status}, message: ${text}`); 
+                        });
+                    }
+                    return response.json(); 
+                })
+                .then(data => {
+                    // Удаляем индикатор загрузки
+                    const loadingElem = document.getElementById('route-loading');
+                    if (loadingElem) document.body.removeChild(loadingElem);
+                    
+                    displayRoute(data);
+                })
+                .catch(error => {
+                    // Удаляем индикатор загрузки
+                    const loadingElem = document.getElementById('route-loading');
+                    if (loadingElem) document.body.removeChild(loadingElem);
+                    
+                    console.error('Ошибка при получении маршрута:', error);
+                    // Показываем более детальную ошибку пользователю
+                    NeoDialog.alert('Ошибка', `Произошла ошибка при построении маршрута: ${error.message}`);
+                    
+                    // НЕ вызываем сброс точек, оставляем текущие точки А и Б
+                    // для возможности повторной попытки
+                });
+        }
+
+        // Получение точек интереса выбранного типа
+        function getPois(type) {
+            console.log('Запрос POI типа:', type);
+            
+            // GraphHopper API использует точку отсчета 55.19, 30.20 - это центр Витебска
+            // Получаем только POI в радиусе центральной части города
+            return fetch(`/api/pois?types=${type}`)
+                .then(response => {
+                    if (!response.ok) {
+                        return response.text().then(text => {
+                            throw new Error(`HTTP error! status: ${response.status}, message: ${text || 'Нет сообщения'}`);
+                        });
+                    }
+                    return response.json();
+                })
+                .catch(error => {
+                    console.error('Ошибка при получении POI:', error);
+                    NeoDialog.alert('Ошибка', `Не удалось получить точки интереса: ${error.message}`);
+                    return [];
+                });
+        }
+        
+        // Построение тематического маршрута с учетом темпа и длительности
+        async function buildThematicRoute() {
+            clearMap();
+            
+            // Получаем параметры маршрута
+            const duration = parseInt(document.getElementById('route-duration').value);
+            const pace = document.querySelector('input[name="route-pace"]:checked').value;
+            const isRelaxed = pace === 'relaxed';
+            
+            // Определяем скорость движения в зависимости от темпа
+            const speed = isRelaxed ? 3 : 5; // км/ч
+            
+            // Получаем количество точек из слайдера или рассчитываем по длительности
+            let poiCount = parseInt(poiCountSlider.value);
+            
+            // Если указана длительность, корректируем количество точек
+            if (duration > 0) {
+                // Расчет максимального количества точек на основе длительности и темпа
+                // Примерно 15-20 минут на точку для размеренного темпа, 10-15 для активного
+                const minutesPerPoi = isRelaxed ? 20 : 15;
+                const recommendedCount = Math.max(3, Math.min(10, Math.floor(duration / minutesPerPoi)));
+                
+                // Если слайдер установлен на большее значение, предупреждаем пользователя
+                if (poiCount > recommendedCount) {
+                    const confirmResult = await NeoDialog.confirm('Внимание', `Для маршрута длительностью ${duration} минут при ${isRelaxed ? 'размеренном' : 'активном'} темпе рекомендуется не более ${recommendedCount} точек. Уменьшить количество точек?`);
+                    if (confirmResult) {
+                        poiCount = recommendedCount;
+                        poiCountSlider.value = poiCount;
+                        poiCountValue.textContent = poiCount;
+                    }
+                }
+            }
+            
+            // Отображаем индикатор загрузки
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'route-loading-indicator';
+            loadingDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                z-index: 1000;
+                text-align: center;
+            `;
+            loadingDiv.innerHTML = `
+                <div style="
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-top: 4px solid white;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    margin: 0 auto 15px auto;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <div>Строим маршрут (${duration > 0 ? `до ${duration} минут` : 'без ограничения'}, ${isRelaxed ? 'размеренный' : 'активный'} темп)...</div>
+            `;
+            document.body.appendChild(loadingDiv);
+            
+            // Определяем API эндпоинт в зависимости от категории POI
+            const isCulturalCategory = document.getElementById('category-cultural').classList.contains('active');
+            const apiEndpoint = isCulturalCategory ? '/api/cultural-pois' : '/api/pois';
+            
+            // Получаем POI выбранного типа
+            try {
+                // Формируем URL для запроса POI в зависимости от категории и типа
+                const poiUrl = `${apiEndpoint}?types=${currentPoiType}`;
+                console.log(`Запрашиваем точки интереса: ${poiUrl}`);
+                
+                const response = await fetch(poiUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const pois = await response.json();
+                
+                if (pois.length < 3) {
+                    document.body.removeChild(loadingDiv);
+                    NeoDialog.alert('Внимание', `Недостаточно точек типа ${currentPoiType} для построения маршрута (нужно минимум 3)`);
+                    return;
+                }
+                
+                // Сохраняем все доступные POI для возможного перемешивания позже
+                currentPois = pois;
+                
+                // Сортируем POI по рейтингу, если доступен
+                if (pois[0] && 'rating' in pois[0]) {
+                    pois.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                }
+                
+                // Выбираем заданное количество случайных точек для маршрута
+                let selectedPois = pois;
+                if (pois.length > poiCount) {
+                    selectedPois = [];
+                    selectedPoisIndexes = new Set();
+                    
+                    // Берем первые 2-3 точки с наивысшим рейтингом
+                    const topRatedCount = Math.min(Math.ceil(poiCount / 3), 3);
+                    for (let i = 0; i < topRatedCount && i < pois.length; i++) {
+                        selectedPoisIndexes.add(i);
+                    }
+                    
+                    // Остальные выбираем случайно
+                    while (selectedPoisIndexes.size < poiCount) {
+                        selectedPoisIndexes.add(Math.floor(Math.random() * pois.length));
+                    }
+                    
+                    selectedPoisIndexes.forEach(i => selectedPois.push(pois[i]));
+                }
+                
+                // Формируем строку координат для запроса
+                const pointsStr = selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
+                
+                // Запрашиваем маршрут с учетом профиля и темпа
+                const routeResponse = await fetch(`/api/thematic-route?points=${pointsStr}&profile=${currentProfile}&duration=${duration}&pace=${pace}`);
+                
+                if (!routeResponse.ok) {
+                    const errorText = await routeResponse.text();
+                    throw new Error(`HTTP error! status: ${routeResponse.status}, message: ${errorText}`);
+                }
+                
+                const data = await routeResponse.json();
+                
+                // Удаляем индикатор загрузки
+                document.body.removeChild(loadingDiv);
+                
+                // Проверяем, не превышает ли маршрут заданную длительность
+                if (duration > 0 && data.paths && data.paths[0] && (data.paths[0].time / 60000) > duration * 1.2) {
+                    const confirmResult = await NeoDialog.confirm('Внимание', `Построенный маршрут превышает указанную длительность (${Math.round(data.paths[0].time / 60000)} мин. вместо ${duration} мин.). Уменьшить количество точек?`);
+                    if (confirmResult) {
+                        // Уменьшаем количество точек и пробуем построить маршрут снова
+                        poiCountSlider.value = Math.max(3, poiCount - 2);
+                        poiCountValue.textContent = poiCountSlider.value;
+                        buildThematicRoute();
+                        return;
+                    }
+                }
+                
+                // Устанавливаем информацию о типе маршрута
+                document.getElementById('route-type').textContent = `Тематический (${isRelaxed ? 'размеренном' : 'активном'} темп)`;
+                document.getElementById('route-type').style.color = isRelaxed ? '#4CAF50' : '#FF9800';
+                
+                // Отображаем маршрут и сохраняем данные для возможности сохранения
+                displayRoute(data, selectedPois);
+                
+                // Показываем панель информации о маршруте
+                const routeInfo = document.getElementById('route-info');
+                if (routeInfo) {
+                    routeInfo.style.display = 'block';
+                }
+                
+            } catch (error) {
+                // Удаляем индикатор загрузки
+                if (document.getElementById('route-loading-indicator')) {
+                    document.body.removeChild(document.getElementById('route-loading-indicator'));
+                }
+                
+                console.error('Ошибка при получении тематического маршрута:', error);
+                NeoDialog.alert(`Ошибка при построении тематического маршрута: ${error.message}`);
+            }
+        }
+        
+        // Функция для перемешивания точек текущего маршрута
+        async function shufflePois() {
+            if (!currentPois || currentPois.length === 0) {
+                NeoDialog.alert('Внимание', 'Сначала постройте тематический маршрут');
+                return;
+            }
+            
+            clearMap();
+            
+            // Получаем количество точек из слайдера
+            const poiCount = parseInt(poiCountSlider.value);
+            
+            // Выбираем случайные точки, но другие чем раньше если возможно
+            let newIndexes = new Set();
+            let attempts = 0;
+            const maxAttempts = 50; // предотвращаем бесконечный цикл
+            
+            while (newIndexes.size < poiCount && attempts < maxAttempts) {
+                const randomIndex = Math.floor(Math.random() * currentPois.length);
+                if (!selectedPoisIndexes.has(randomIndex) || currentPois.length <= poiCount) {
+                    newIndexes.add(randomIndex);
+                }
+                attempts++;
+            }
+            
+            // Если не получилось найти достаточно новых индексов, добираем из старых
+            if (newIndexes.size < poiCount) {
+                selectedPoisIndexes.forEach(i => {
+                    if (newIndexes.size < poiCount) {
+                        newIndexes.add(i);
+                    }
+                });
+            }
+            
+            // Обновляем выбранные индексы
+            selectedPoisIndexes = newIndexes;
+            
+            // Создаем новый список точек
+            const selectedPois = [];
+            selectedPoisIndexes.forEach(i => selectedPois.push(currentPois[i]));
+            
+            // Формируем строку координат для запроса
+            const pointsStr = selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
+            
+            try {
+                // Отображаем индикатор загрузки
+                const loadingDiv = document.createElement('div');
+                loadingDiv.id = 'shuffle-loading-indicator';
+                loadingDiv.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background-color: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 20px;
+                    border-radius: 10px;
+                    z-index: 1000;
+                    text-align: center;
+                `;
+                loadingDiv.innerHTML = `
+                    <div style="
+                        border: 4px solid rgba(255, 255, 255, 0.3);
+                        border-top: 4px solid white;
+                        border-radius: 50%;
+                        width: 40px;
+                        height: 40px;
+                        margin: 0 auto 15px auto;
+                        animation: spin 1s linear infinite;
+                    "></div>
+                    <div>Перемешиваем точки и строим маршрут...</div>
+                `;
+                document.body.appendChild(loadingDiv);
+                
+                // Запрашиваем маршрут
+                const response = await fetch(`/api/thematic-route?points=${pointsStr}&profile=${currentProfile}`);
+                
+                // Удаляем индикатор загрузки
+                document.body.removeChild(loadingDiv);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+                }
+                
+                const data = await response.json();
+                displayRoute(data, selectedPois);
+            } catch (error) {
+                console.error('Ошибка при получении тематического маршрута:', error);
+                NeoDialog.alert(`Ошибка при построении тематического маршрута: ${error.message}`);
+                
+                // Удаляем индикатор загрузки если он еще существует
+                if (document.getElementById('shuffle-loading-indicator')) {
+                    document.body.removeChild(document.getElementById('shuffle-loading-indicator'));
+                }
+            }
+        }
+
+        // --- Обработчики событий ---
+
+        // Клик по карте для выбора точек А и Б
+        map.on('click', function(e) {
+            const clickedLat = e.latlng.lat;
+            const clickedLng = e.latlng.lng;
+            
+            // Полностью очищаем карту перед любыми действиями
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+                routeLayer = null;
+            }
+            
+            // Удаляем все существующие маркеры
+            if (startMarker) {
+                map.removeLayer(startMarker);
+                startMarker = null;
+            }
+            
+            if (endMarker) {
+                map.removeLayer(endMarker);
+                endMarker = null;
+            }
+            
+            // Очищаем маркеры POI и скрываем информацию о маршруте
+            clearPoiMarkers();
+            const routeInfo = document.getElementById('route-info');
+            if (routeInfo) routeInfo.style.display = 'none';
+
+            if (!startPoint) {
+                // Выбираем точку А (первый клик)
+                console.log('Выбор точки А (первый клик)');
+                startPoint = { lat: clickedLat, lng: clickedLng };
+                startMarker = L.marker([clickedLat, clickedLng], {
+                    icon: L.divIcon({className: 'route-marker-start', html: 'A', iconSize: [24, 24], iconAnchor: [12, 24]})
+                }).addTo(map);
+                console.log('Точка А выбрана:', startPoint);
+            } else if (!endPoint) {
+                // Выбираем точку Б и строим маршрут
+                console.log('Выбор точки Б (второй клик)');
+                endPoint = { lat: clickedLat, lng: clickedLng };
+                
+                // Восстанавливаем маркер точки А, который мы удалили выше
+                startMarker = L.marker([startPoint.lat, startPoint.lng], {
+                    icon: L.divIcon({className: 'route-marker-start', html: 'A', iconSize: [24, 24], iconAnchor: [12, 24]})
+                }).addTo(map);
+                
+                console.log('Точка Б выбрана:', endPoint);
+                getAndDisplayRoute(startPoint.lat, startPoint.lng, endPoint.lat, endPoint.lng, currentProfile);
+            } else {
+                // Сбрасываем предыдущие точки и начинаем заново с точки А
+                console.log('Сброс точек и выбор новой точки А');
+                startPoint = { lat: clickedLat, lng: clickedLng };
+                endPoint = null;
+                
+                // Создаем только маркер точки А
+                startMarker = L.marker([clickedLat, clickedLng], {
+                    icon: L.divIcon({className: 'route-marker-start', html: 'A', iconSize: [24, 24], iconAnchor: [12, 24]})
+                }).addTo(map);
+                
+                console.log('Старые точки сброшены. Новая точка А выбрана:', startPoint);
+            }
+        });
+
+        // Выбор профиля транспорта
+        profileButtons.addEventListener('click', function(e) {
+            if (e.target.tagName === 'BUTTON') {
+                const selectedProfile = e.target.id.replace('profile-', '');
+                if (selectedProfile !== currentProfile) {
+                    currentProfile = selectedProfile;
+                    // Обновляем активную кнопку
+                    profileButtons.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+                    e.target.classList.add('active');
+                    console.log('Выбран профиль:', currentProfile);
+                    // Если точки А и Б уже выбраны, перестраиваем маршрут
+                    if (startPoint && endPoint) {
+                        getAndDisplayRoute(startPoint.lat, startPoint.lng, endPoint.lat, endPoint.lng, currentProfile);
+                    }
+                }
+            }
+        });
+
+        // Кнопка сброса
+        resetButton.addEventListener('click', function() {
+            console.log('Кнопка сброса нажата, вызываю полный сброс точек');
+            fullResetPoints(); // Используем полный сброс
+        });
+
+        // Добавляем обработчик для кнопок категорий POI
+        document.getElementById('category-food').addEventListener('click', function() {
+            // Активируем категорию "Еда"
+            document.getElementById('category-food').classList.add('active');
+            document.getElementById('category-cultural').classList.remove('active');
+            document.getElementById('poi-food-buttons').classList.add('active');
+            document.getElementById('poi-cultural-buttons').classList.remove('active');
+            
+            // Устанавливаем тип POI по умолчанию для категории "Еда"
+            currentPoiType = 'restaurant';
+            updateActivePoi('poi-restaurant');
+            
+            // Показываем элементы тематического маршрута
+            showThematicRouteElements();
+        });
+        
+        document.getElementById('category-cultural').addEventListener('click', function() {
+            // Активируем категорию "Культура"
+            document.getElementById('category-cultural').classList.add('active');
+            document.getElementById('category-food').classList.remove('active');
+            document.getElementById('poi-cultural-buttons').classList.add('active');
+            document.getElementById('poi-food-buttons').classList.remove('active');
+            
+            // Устанавливаем тип POI по умолчанию для категории "Культура"
+            currentPoiType = 'museum';
+            updateActivePoi('poi-museum');
+            
+            // Скрываем элементы тематического маршрута
+            hideThematicRouteElements();
+        });
+        
+        // Функция для скрытия элементов тематического маршрута
+        function hideThematicRouteElements() {
+            const elements = [
+                document.getElementById('thematic-route-button'),
+                document.getElementById('shuffle-poi-button'),
+                document.getElementById('optimize-route-button')
+            ];
+            
+            // Скрываем кнопки
+            elements.forEach(el => {
+                if (el) {
+                    el.style.opacity = '0';
+                    setTimeout(() => {
+                        el.style.display = 'none';
+                        el.style.height = '0';
+                        el.style.margin = '0';
+                        el.style.padding = '0';
+                    }, 300);
+                }
+            });
+            
+            // Скрываем слайдер и описание
+            const sliderContainer = document.querySelector('.neo-slider:not(.cultural-route-block .neo-slider)');
+            if (sliderContainer) {
+                sliderContainer.style.opacity = '0';
+                setTimeout(() => {
+                    sliderContainer.style.display = 'none';
+                    sliderContainer.style.height = '0';
+                    sliderContainer.style.margin = '0';
+                }, 300);
+            }
+        }
+        
+        // Функция для отображения элементов тематического маршрута
+        function showThematicRouteElements() {
+            const elements = [
+                document.getElementById('thematic-route-button'),
+                document.getElementById('shuffle-poi-button'),
+                document.getElementById('optimize-route-button')
+            ];
+            
+            // Показываем кнопки
+            elements.forEach(el => {
+                if (el) {
+                    el.style.display = 'block';
+                    el.style.height = '';
+                    el.style.margin = '';
+                    el.style.padding = '';
+                    setTimeout(() => {
+                        el.style.opacity = '1';
+                    }, 10);
+                }
+            });
+            
+            // Показываем слайдер и описание
+            const sliderContainer = document.querySelector('.neo-slider:not(.cultural-route-block .neo-slider)');
+            if (sliderContainer) {
+                sliderContainer.style.display = 'block';
+                sliderContainer.style.height = '';
+                sliderContainer.style.margin = '';
+                setTimeout(() => {
+                    sliderContainer.style.opacity = '1';
+                }, 10);
+            }
+        }
+        
+        // Функция для обновления активного POI
+        function updateActivePoi(poiId) {
+            // Сбрасываем активный класс у всех кнопок в обеих категориях
+            document.querySelectorAll('#poi-food-buttons button, #poi-cultural-buttons button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Делаем выбранную кнопку активной
+            const selectedButton = document.getElementById(poiId);
+            if (selectedButton) {
+                selectedButton.classList.add('active');
+            }
+        }
+        
+        // Добавляем обработчики для кнопок категории "Еда"
+        document.querySelectorAll('#poi-food-buttons button').forEach(button => {
+            button.addEventListener('click', function() {
+                const selectedPoi = this.id.replace('poi-', '');
+                currentPoiType = selectedPoi;
+                updateActivePoi(this.id);
+                console.log('Выбран тип точек интереса:', currentPoiType);
+            });
+        });
+        
+        // Добавляем обработчики для кнопок категории "Культура"
+        document.querySelectorAll('#poi-cultural-buttons button').forEach(button => {
+            button.addEventListener('click', function() {
+                const selectedPoi = this.id.replace('poi-', '');
+                currentPoiType = selectedPoi;
+                updateActivePoi(this.id);
+                console.log('Выбран тип точек интереса:', currentPoiType);
+            });
+        });
+
+        // Обновление отображаемого значения слайдера
+        poiCountSlider.addEventListener('input', function() {
+            poiCountValue.textContent = this.value;
+        });
+
+        // Добавляем обработчик для кнопки построения тематического маршрута
+        if (thematicRouteButton) {
+            thematicRouteButton.addEventListener('click', buildThematicRoute);
+            console.log('Обработчик для кнопки тематического маршрута добавлен');
+        }
+        
+        // Кнопка перемешивания точек
+        shufflePoiButton.addEventListener('click', shufflePois);
+        
+        // Определяем функцию buildOptimalThematicRoute прямо в основном файле
+        async function buildOptimalThematicRoute() {
+            console.log('Запускаем построение оптимального маршрута');
+            
+            // Очищаем карту
+            clearMap();
+            
+            // Получаем тип POI и профиль маршрута
+            const poiType = currentPoiType;
+            const profile = currentProfile;
+            
+            // Получаем количество точек из слайдера
+            const poiCount = parseInt(poiCountSlider.value);
+            
+            // Показываем индикатор загрузки
+            const loadingDiv = document.createElement('div');
+            loadingDiv.id = 'loading-indicator';
+            loadingDiv.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background-color: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 20px;
+                border-radius: 10px;
+                z-index: 1000;
+                text-align: center;
+            `;
+            loadingDiv.innerHTML = `
+                <div style="
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-top: 4px solid white;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    margin: 0 auto 15px auto;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <div>Анализируем лучшие варианты маршрута...</div>
+            `;
+            document.body.appendChild(loadingDiv);
+            
+            // Добавляем стиль для анимации загрузки
+            if (!document.getElementById('loading-animation-style')) {
+                const style = document.createElement('style');
+                style.id = 'loading-animation-style';
+                style.textContent = `
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
+                `;
+                document.head.appendChild(style);
+            }
+            
+            try {
+                // Получаем все доступные POI выбранного типа
+                const response = await fetch(`/api/pois?types=${poiType}`);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorText || 'Нет сообщения'}`);
+                }
+                
+                const pois = await response.json();
+                
+                if (pois.length < 3) {
+                    // Удаляем индикатор загрузки
+                    const loadingIndicator = document.getElementById('loading-indicator');
+                    if (loadingIndicator) loadingIndicator.remove();
+                    
+                    NeoDialog.alert('Внимание', `Недостаточно точек типа "${poiType}" для построения маршрута (нужно минимум 3)`);
+                    return;
+                }
+                
+                // Сохраняем все доступные POI
+                currentPois = pois;
+                
+                // Фильтруем POI по рейтингу, если это возможно
+                let filteredPois = pois;
+                if (pois[0].hasOwnProperty('rating')) {
+                    // Сортируем по рейтингу (от высшего к низшему)
+                    filteredPois = pois.filter(poi => poi.rating > 0)
+                                    .sort((a, b) => b.rating - a.rating);
+                                    
+                    // Берем только лучшие точки если их много
+                    if (filteredPois.length > poiCount * 3) {
+                        filteredPois = filteredPois.slice(0, poiCount * 3);
+                    }
+                }
+                
+                // Используем жадный алгоритм для построения оптимального маршрута
+                // Сначала выбираем точку с наивысшим рейтингом
+                const selectedPoisIndices = [0]; // Начинаем с первой точки (самой высокорейтинговой)
+                
+                // Выбираем остальные точки по балансу рейтинга и расстояния
+                while (selectedPoisIndices.length < poiCount) {
+                    let bestScore = -1;
+                    let bestIndex = -1;
+                    
+                    for (let i = 0; i < filteredPois.length; i++) {
+                        // Пропускаем уже выбранные точки
+                        if (selectedPoisIndices.includes(i)) continue;
+                        
+                        // Считаем минимальное расстояние до уже выбранных точек
+                        let minDistance = Infinity;
+                        for (const selectedIndex of selectedPoisIndices) {
+                            const dist = calculateDistance(
+                                filteredPois[selectedIndex].latitude, filteredPois[selectedIndex].longitude,
+                                filteredPois[i].latitude, filteredPois[i].longitude
+                            );
+                            minDistance = Math.min(minDistance, dist);
+                        }
+                        
+                        // Получаем рейтинг точки
+                        const rating = filteredPois[i].rating || 3; // Средний рейтинг по умолчанию
+                        
+                        // Вычисляем общий скор (комбинация рейтинга и расстояния)
+                        // Высокий рейтинг - лучше, большое расстояние - хуже
+                        const ratingWeight = 0.7;
+                        const distanceWeight = 0.3;
+                        
+                        // Нормализуем значения
+                        const normalizedRating = rating / 5; // От 0 до 1
+                        const normalizedDistance = 1 - Math.min(minDistance / 5, 1); // Обратная шкала, ближе = лучше
+                        
+                        const score = (normalizedRating * ratingWeight) + (normalizedDistance * distanceWeight);
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestIndex = i;
+                        }
+                    }
+                    
+                    if (bestIndex >= 0) {
+                        selectedPoisIndices.push(bestIndex);
+                    }
+                }
+                
+                // Получаем выбранные POI
+                const selectedPois = selectedPoisIndices.map(index => filteredPois[index]);
+                
+                // Формируем строку координат для запроса маршрута
+                const pointsStr = selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
+                
+                // Запрашиваем маршрут
+                const routeResponse = await fetch(`/api/thematic-route?points=${pointsStr}&profile=${profile}`);
+                
+                if (!routeResponse.ok) {
+                    const errorText = await routeResponse.text();
+                    throw new Error(`HTTP error! status: ${routeResponse.status}, message: ${errorText}`);
+                }
+                
+                const data = await routeResponse.json();
+                
+                // Удаляем индикатор загрузки
+                const loadingIndicator = document.getElementById('loading-indicator');
+                if (loadingIndicator) loadingIndicator.remove();
+                
+                // Устанавливаем флаг оптимизации маршрута
+                window.routeOptimized = true;
+                
+                // Отображаем маршрут
+                displayRoute(data, selectedPois);
+                
+                // Обновляем информацию о типе маршрута, если такой элемент есть
+                const routeTypeElement = document.getElementById('route-type');
+                if (routeTypeElement) {
+                    routeTypeElement.textContent = 'Оптимизированный';
+                    routeTypeElement.style.color = '#4CAF50';
+                    routeTypeElement.style.fontWeight = 'bold';
+                }
+                
+                // Применяем особый стиль для оптимизированного маршрута
+                if (routeLayer) {
+                    routeLayer.setStyle({
+                        dashArray: null, // Сплошная линия вместо пунктирной
+                        color: getRouteColor(profile)
+                    });
+                }
+                
+                console.log('Оптимальный маршрут построен успешно');
+                
+            } catch (error) {
+                // Удаляем индикатор загрузки
+                const loadingIndicator = document.getElementById('loading-indicator');
+                if (loadingIndicator) loadingIndicator.remove();
+                
+                console.error('Ошибка при получении маршрута:', error);
+                NeoDialog.alert(`Ошибка при построении маршрута: ${error.message}`);
+            }
+        }
+        
+        // Вспомогательная функция для расчета расстояния между двумя точками
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // Радиус Земли в км
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = 
+                Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+                Math.sin(dLon/2) * Math.sin(dLon/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+            return R * c;
+        }
+        
+        // Возвращает цвет для маршрута в зависимости от профиля
+        function getRouteColor(profile) {
+            switch (profile) {
+                case 'foot':
+                    return '#3949AB'; // Индиго для пешеходных маршрутов
+                case 'bike':
+                    return '#00897B'; // Бирюзовый для велосипедных маршрутов
+                case 'car':
+                    return '#E64A19'; // Оранжевый для автомобильных маршрутов
+                default:
+                    return '#3F51B5'; // Индиго по умолчанию
+            }
+        }
+        
+        // Добавляем обработчик для кнопки оптимизации маршрута
+        const optimizeRouteButton = document.getElementById('optimize-route-button');
+        if (optimizeRouteButton) {
+            optimizeRouteButton.addEventListener('click', buildOptimalThematicRoute);
+            console.log('Обработчик для кнопки оптимизации добавлен');
+        }
+        
+        // Добавляем обработчик для кнопки сохранения маршрута
+        if (saveRouteButton) {
+            saveRouteButton.addEventListener('click', function() {
+                if (window.personalizationModule && routeLayer) {
+                    try {
+                        // Проверяем доступность данных маршрута
+                        const routeDistance = parseFloat(document.getElementById('info-distance').textContent);
+                        const routeTime = parseInt(document.getElementById('info-time').textContent);
+                        const routeProfile = currentProfile || 'foot';
+                        
+                        // Получаем точки маршрута
+                        const routePoints = routeLayer.getLatLngs();
+                        if (!routePoints || routePoints.length === 0) {
+                            console.error('Ошибка: нет точек маршрута');
+                            NeoDialog.alert('Ошибка', 'Маршрут не содержит точек');
+                            return;
+                        }
+                        
+                        // Преобразуем точки в нужный формат
+                        const formattedPoints = routePoints.map(latlng => [latlng.lat, latlng.lng]);
+                        
+                        // Передаем данные маршрута и точек интереса
+                    const currentRouteData = {
+                            distance: routeDistance,
+                            time: routeTime,
+                            profile: routeProfile,
+                            points: formattedPoints
+                        };
+                        
+                        // Собираем данные о точках интереса
+                        const currentPoisData = [];
+                        
+                        // Если есть маркеры POI, добавляем их
+                        if (poiMarkers && poiMarkers.length > 0) {
+                            poiMarkers.forEach((marker, index) => {
+                                const latLng = marker.getLatLng();
+                                let name = `Точка ${index + 1}`;
+                                let poiType = 'waypoint';
+                                let rating = null;
+                                
+                                // Пытаемся извлечь данные из попапа маркера
+                                if (marker._popup) {
+                                    const popupContent = marker._popup._content;
+                                    
+                                    // Извлекаем имя из тега <b>
+                                    const nameMatch = popupContent.match(/<b>(.*?)<\/b>/);
+                                    if (nameMatch && nameMatch[1]) {
+                                        name = nameMatch[1];
+                                    }
+                                    
+                                    // Пытаемся найти тип POI
+                                    const typeMatch = popupContent.match(/Тип: (.*?)(<br|$)/);
+                                    if (typeMatch && typeMatch[1]) {
+                                        poiType = typeMatch[1];
+                                    }
+                                    
+                                    // Пытаемся найти рейтинг
+                                    const ratingMatch = popupContent.match(/Рейтинг: (.*?)(<br|$)/);
+                                    if (ratingMatch && ratingMatch[1]) {
+                                        rating = parseFloat(ratingMatch[1]);
+                                    }
+                                }
+                                
+                                currentPoisData.push({
+                                    lat: latLng.lat,
+                                    lng: latLng.lng,
+                                    name: name,
+                                    type: poiType,
+                                    rating: rating
+                                });
+                            });
+                        } else {
+                            // Если нет маркеров POI, используем начальную и конечную точки маршрута
+                            if (routePoints.length > 0) {
+                                const startPoint = routePoints[0];
+                                currentPoisData.push({
+                                    lat: startPoint.lat,
+                                    lng: startPoint.lng,
+                                    name: 'Начало маршрута',
+                                    type: 'waypoint'
+                                });
+                                
+                                const endPoint = routePoints[routePoints.length - 1];
+                                if (endPoint && endPoint !== startPoint) {
+                                    currentPoisData.push({
+                                        lat: endPoint.lat,
+                                        lng: endPoint.lng,
+                                        name: 'Конец маршрута',
+                                        type: 'waypoint'
+                                    });
+                                }
+                            }
+                        }
+                        
+                        console.log('Данные маршрута для сохранения:', currentRouteData);
+                        console.log('Данные POI для сохранения:', currentPoisData);
+                    
+                    // Используем обновленный метод saveCurrentRoute, который возвращает Promise
+                    window.personalizationModule.saveCurrentRoute(currentRouteData, currentPoisData)
+                        .catch(error => {
+                            if (error) {
+                                console.error('Ошибка при сохранении маршрута:', error);
+                                NeoDialog.alert('Ошибка', `Ошибка при сохранении маршрута: ${error.message}`);
+                            }
+                        });
+                    } catch (error) {
+                        console.error('Ошибка при подготовке данных маршрута:', error);
+                        NeoDialog.alert('Ошибка', 'Ошибка при подготовке данных маршрута: ' + error.message);
+                    }
+                } else {
+                    NeoDialog.alert('Внимание', 'Сначала постройте маршрут');
+                }
+            });
+        }
+        
+        // Добавляем обработчик для кнопки сохранения культурного маршрута
+        if (saveCulturalRouteButton) {
+            saveCulturalRouteButton.addEventListener('click', function() {
+                if (window.personalizationModule && window.culturalRouteLayer) {
+                    try {
+                        // Получаем данные о маршруте из панели
+                        const routeSummary = document.querySelector('#route-info-panel .route-summary');
+                        let routeDistance = 0;
+                        let routeTime = 0;
+                        
+                        if (routeSummary) {
+                            // Извлекаем данные из текста элемента
+                            const distanceMatch = routeSummary.innerHTML.match(/Расстояние:<\/strong>\s*(\d+\.?\d*)/);
+                            if (distanceMatch && distanceMatch[1]) {
+                                routeDistance = parseFloat(distanceMatch[1]);
+                            }
+                            
+                            const timeMatch = routeSummary.innerHTML.match(/Время:<\/strong>\s*(\d+)/);
+                            if (timeMatch && timeMatch[1]) {
+                                routeTime = parseInt(timeMatch[1]);
+                            }
+                        }
+                        
+                        const routeProfile = getCurrentProfile();
+                        
+                        // Получаем точки маршрута
+                        const routePoints = window.culturalRouteLayer.getLatLngs();
+                        if (!routePoints || routePoints.length === 0) {
+                            console.error('Ошибка: нет точек культурного маршрута');
+                            NeoDialog.alert('Ошибка', 'Культурный маршрут не содержит точек');
+                            return;
+                        }
+                        
+                        // Преобразуем точки в нужный формат
+                        const formattedPoints = routePoints.map(latlng => [latlng.lat, latlng.lng]);
+                        
+                        // Формируем данные маршрута
+                        const currentRouteData = {
+                            distance: routeDistance,
+                            time: routeTime,
+                            profile: routeProfile,
+                            points: formattedPoints
+                        };
+                        
+                        // Формируем данные точек интереса
+                        const currentPoisData = [];
+                        
+                        // Если есть культурные маркеры, добавляем их
+                        if (window.culturalMarkers && window.culturalMarkers.length > 0) {
+                            window.culturalMarkers.forEach((marker, index) => {
+                                const latLng = marker.getLatLng();
+                                
+                                // Пытаемся получить данные из маркера
+                                let poiData = {
+                                    lat: latLng.lat,
+                                    lng: latLng.lng,
+                                    name: `Культурная точка ${index + 1}`,
+                                    type: 'cultural',
+                                    rating: null
+                                };
+                                
+                                // Если у маркера есть попап, извлекаем данные из него
+                                if (marker._popup) {
+                                    const popupContent = marker._popup._content;
+                                    
+                                    // Извлекаем название
+                                    const nameMatch = popupContent.match(/<h3>(.*?)<\/h3>/);
+                                    if (nameMatch && nameMatch[1]) {
+                                        // Удаляем номер из названия, если он есть
+                                        poiData.name = nameMatch[1].replace(/^\d+\.\s*/, '');
+                                    }
+                                    
+                                    // Извлекаем тип
+                                    const typeMatch = popupContent.match(/Тип:<\/strong>\s*(.*?)<\//);
+                                    if (typeMatch && typeMatch[1]) {
+                                        poiData.type = typeMatch[1];
+                                    }
+                                    
+                                    // Извлекаем рейтинг
+                                    const ratingMatch = popupContent.match(/Рейтинг:<\/strong>\s*(.*?)<\//);
+                                    if (ratingMatch && ratingMatch[1] && ratingMatch[1] !== 'Нет данных') {
+                                        poiData.rating = parseFloat(ratingMatch[1]);
+                                    }
+                                    
+                                    // Извлекаем фото URL, если есть
+                                    const photoMatch = popupContent.match(/<img src="(.*?)"/);
+                                    if (photoMatch && photoMatch[1]) {
+                                        poiData.photoUrl = photoMatch[1];
+                                    }
+                                }
+                                
+                                currentPoisData.push(poiData);
+                            });
+                        }
+                        
+                        console.log('Данные культурного маршрута для сохранения:', currentRouteData);
+                        console.log('Данные культурных POI для сохранения:', currentPoisData);
+                        
+                        // Вызываем функцию сохранения с поддержкой Promise
+                        window.personalizationModule.saveCurrentRoute(currentRouteData, currentPoisData)
+                            .catch(error => {
+                                if (error) {
+                                    console.error('Ошибка при сохранении культурного маршрута:', error);
+                                    NeoDialog.alert('Ошибка', `Ошибка при сохранении культурного маршрута: ${error.message}`);
+                                }
+                            });
+                    } catch (error) {
+                        console.error('Ошибка при подготовке данных культурного маршрута:', error);
+                        NeoDialog.alert('Ошибка', 'Ошибка при подготовке данных культурного маршрута: ' + error.message);
+                    }
+                } else {
+                    NeoDialog.alert('Внимание', 'Сначала постройте культурный маршрут');
+                }
+            });
+        }
+        
+        // Обновляем параметры маршрута при загрузке страницы если доступен модуль персонализации
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.personalizationModule) {
+                setTimeout(() => {
+                    window.personalizationModule.updateRouteParameters();
+                }, 500); // Небольшая задержка для уверенности, что все элементы загружены
+            }
+        });
+    </script>
+</body>
+</html>
+
