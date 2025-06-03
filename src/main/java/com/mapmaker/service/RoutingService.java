@@ -20,7 +20,7 @@ public class RoutingService {
     private final RestTemplate restTemplate;
 
     // Ключ API GraphHopper
-    @Value("${graphhopper.api.key:3ed70bc6-d2bc-4816-851f-a2ef0bb4c563}")
+    @Value("${graphhopper.api.key:219b0a47-70f9-4036-a2f0-14470b011033}")
     private String apiKey;
 
     // Внедряем RestTemplate (добавьте @Bean в основной класс приложения или конфигурацию)

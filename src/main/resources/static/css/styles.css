@@ -1056,7 +1056,6 @@ input[type="radio"]:checked::before {
 /* Добавляем стили для плавного скрытия/отображения элементов */
 #thematic-route-button, 
 #shuffle-poi-button, 
-#optimize-route-button,
 .neo-slider:not(.cultural-route-block .neo-slider) {
     transition: opacity 0.3s ease, height 0.3s ease, margin 0.3s ease, padding 0.3s ease;
 }

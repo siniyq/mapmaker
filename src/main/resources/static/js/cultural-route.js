@@ -44,13 +44,21 @@ function initCulturalRouteHandlers() {
  */
 function buildCulturalThematicRoute() {
     clearMap(); // Очищаем карту перед построением нового маршрута
-    showLoadingIndicator("Создаем культурный маршрут...");
+    
+    // Проверяем, установлен ли начальный маркер
+    if (!window.startPoint) {
+        NeoDialog.alert('Внимание', 'Сначала установите начальную точку маршрута, кликнув на карту');
+        return;
+    }
+    
+    showLoadingIndicator("Создаем культурный маршрут от вашей точки...");
     
     // Получаем параметры маршрута
     const count = getCulturalPoiCount(); // Используем функцию вместо прямого доступа к DOM
     const profile = getCurrentProfile();
     
     console.log('Построение культурного маршрута с количеством точек:', count);
+    console.log('Стартовая точка пользователя:', window.startPoint);
     
     // Обновляем значение ползунка и отображаемое значение
     const slider = document.getElementById('cultural-poi-count');
@@ -109,10 +117,16 @@ function buildCulturalThematicRoute() {
                 console.log(`Точка ${index+1}: ${point.name} (${point.type}), рейтинг: ${point.rating}`);
             });
             
-            // Формируем строку координат для запроса маршрута
-            const pointsStr = window.culturalPoints
-                .map(point => `${point.latitude},${point.longitude}`)
-                .join(';');
+            // Обновляем сообщение о загрузке
+            showLoadingIndicator("Строим маршрут от вашей точки...");
+            
+            // Формируем строку координат для запроса маршрута, НАЧИНАЯ СО СТАРТОВОЙ ТОЧКИ ПОЛЬЗОВАТЕЛЯ
+            const pointsStr = `${window.startPoint.lat},${window.startPoint.lng};` + 
+                              window.culturalPoints
+                                .map(point => `${point.latitude},${point.longitude}`)
+                                .join(';');
+            
+            console.log(`Строка координат маршрута (с пользовательской стартовой точкой): ${pointsStr}`);
             
             // Запрашиваем построение маршрута
             return fetch(`/api/thematic-route?points=${pointsStr}&profile=${profile}`);
@@ -135,7 +149,13 @@ function buildCulturalThematicRoute() {
         .catch(error => {
             hideLoadingIndicator();
             console.error('Ошибка при построении культурного маршрута:', error);
-            alert(`Ошибка: ${error.message}`);
+            
+            // Используем NeoDialog вместо alert для консистентности
+            if (typeof NeoDialog !== 'undefined') {
+                NeoDialog.alert('Ошибка', error.message);
+            } else {
+                alert(`Ошибка: ${error.message}`);
+            }
         });
 }
 
@@ -158,6 +178,21 @@ function displayCulturalRoute(routeData, points, profile) {
             opacity: 0.7
         }).addTo(map);
         
+        // Добавляем стартовый маркер пользователя, если он существует
+        if (window.startPoint) {
+            const startMarker = L.marker([window.startPoint.lat, window.startPoint.lng], {
+                icon: L.divIcon({
+                    className: 'route-marker-start',
+                    html: 'START',
+                    iconSize: [40, 24],
+                    iconAnchor: [20, 24]
+                })
+            }).addTo(map);
+            
+            startMarker.bindPopup('Ваша стартовая точка');
+            window.culturalMarkers.push(startMarker);
+        }
+        
         // Добавляем маркеры для точек маршрута
         points.forEach((point, index) => {
             const marker = L.marker([point.latitude, point.longitude], {
@@ -175,19 +210,26 @@ function displayCulturalRoute(routeData, points, profile) {
         map.fitBounds(window.culturalRouteLayer.getBounds());
         
         // Обновляем информацию о маршруте
-        updateCulturalRouteInfo(points, path);
+        updateCulturalRouteInfo(points, path, profile);
         
         console.log(`Культурный маршрут построен: ${(path.distance / 1000).toFixed(2)} км, ${Math.round(path.time / 1000 / 60)} мин.`);
+        console.log(`Маршрут начинается от пользовательской точки: [${window.startPoint?.lat}, ${window.startPoint?.lng}]`);
     } else {
         console.error("Ошибка: Не удалось получить данные маршрута или маршрут пуст.");
-        alert("Не удалось построить маршрут. Проверьте выбранные точки и попробуйте снова.");
+        
+        // Используем NeoDialog вместо alert для консистентности
+        if (typeof NeoDialog !== 'undefined') {
+            NeoDialog.alert('Ошибка', 'Не удалось построить маршрут. Проверьте выбранные точки и попробуйте снова.');
+        } else {
+            alert("Не удалось построить маршрут. Проверьте выбранные точки и попробуйте снова.");
+        }
     }
 }
 
 /**
  * Обновляет панель с информацией о маршруте
  */
-function updateCulturalRouteInfo(points, routePath) {
+function updateCulturalRouteInfo(points, routePath, profile) {
     const routeInfoPanel = document.getElementById('route-info-panel');
     const routeDescription = document.getElementById('cultural-route-description');
     
@@ -196,18 +238,20 @@ function updateCulturalRouteInfo(points, routePath) {
         return;
     }
     
-    // Обновляем информацию о расстоянии и времени
-    const distanceKm = (routePath.distance / 1000).toFixed(2);
-    const timeMin = Math.round(routePath.time / 1000 / 60);
-    
-    const culturalDistanceElement = document.getElementById('cultural-info-distance');
-    const culturalTimeElement = document.getElementById('cultural-info-time');
-    
-    if (culturalDistanceElement) culturalDistanceElement.textContent = distanceKm;
-    if (culturalTimeElement) culturalTimeElement.textContent = timeMin;
+    // Получаем профиль, если он не передан
+    if (!profile) {
+        profile = getCurrentProfile();
+    }
     
     // Форматирование в точности как в тематическом маршруте
-    let descriptionHtml = '<h4>Описание маршрута:</h4><ol>';
+    let descriptionHtml = '<h4>Описание маршрута:</h4>';
+    
+    // Добавляем информацию о стартовой точке, если она есть
+    if (window.startPoint) {
+        descriptionHtml += '<p><strong>Маршрут начинается от вашей точки</strong></p>';
+    }
+    
+    descriptionHtml += '<ol>';
     
     points.forEach((point, index) => {
         let poiDescription = `<li><b>${point.name}</b> - ${getReadableType(point.type)}`;
@@ -229,6 +273,24 @@ function updateCulturalRouteInfo(points, routePath) {
     });
     
     descriptionHtml += '</ol>';
+    
+    // Добавляем информацию о типе маршрута
+    const distanceKm = (routePath.distance / 1000).toFixed(2);
+    const timeMin = Math.round(routePath.time / 1000 / 60);
+    
+    // Обновляем информацию о расстоянии и времени в шапке панели
+    const culturalDistanceElement = document.getElementById('cultural-info-distance');
+    const culturalTimeElement = document.getElementById('cultural-info-time');
+    
+    if (culturalDistanceElement) culturalDistanceElement.textContent = distanceKm;
+    if (culturalTimeElement) culturalTimeElement.textContent = timeMin;
+    
+    descriptionHtml += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+        <p><b>Общая длина маршрута:</b> ${distanceKm} км</p>
+        <p><b>Примерное время:</b> ${timeMin} мин ${profile === 'foot' ? 'пешком' : (profile === 'bike' ? 'на велосипеде' : 'на автомобиле')}</p>
+        <p><b>Тип маршрута:</b> Культурный (от вашей точки)</p>
+    </div>`;
+    
     routeDescription.innerHTML = descriptionHtml;
                     
     // Показываем панель культурного маршрута и скрываем тематический маршрут
