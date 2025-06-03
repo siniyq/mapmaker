@@ -6,6 +6,7 @@ class PersonalizationModule {
         this.userProfile = null;
         this.isAuthenticated = false;
         this.weatherData = null;
+        this.forecastData = null;
         this.daytime = this.getDaytime();
         
         // API ключ для OpenWeatherMap
@@ -24,10 +25,22 @@ class PersonalizationModule {
         this.checkAuthStatus();
         setInterval(() => this.checkAuthStatus(), 2000); // Проверяем каждые 2 секунды
         
+        // Обновляем погоду каждые 30 минут
+        setInterval(() => this.loadWeatherData(), 30 * 60 * 1000);
+        
         this.updateRecommendationsByDaytime();
     }
     
     setupEventListeners() {
+        // Добавляем обработчики для переключателя погоды
+        const currentTabButton = document.getElementById('weather-tab-current');
+        const forecastTabButton = document.getElementById('weather-tab-forecast');
+        
+        if (currentTabButton && forecastTabButton) {
+            currentTabButton.addEventListener('click', () => this.switchWeatherView('current'));
+            forecastTabButton.addEventListener('click', () => this.switchWeatherView('forecast'));
+        }
+        
         // Профиль пользователя
         // Убираем обработчик клика по кнопке логина, т.к. он будет обрабатываться через onclick атрибут
         
@@ -91,6 +104,43 @@ class PersonalizationModule {
         }
     }
     
+    // Переключение между текущей погодой и прогнозом
+    switchWeatherView(view) {
+        const currentTab = document.getElementById('weather-tab-current');
+        const forecastTab = document.getElementById('weather-tab-forecast');
+        const weatherDescription = document.getElementById('weather-description');
+        const weatherRecommendation = document.getElementById('weather-recommendation');
+        const forecastElement = document.getElementById('weather-forecast');
+        
+        if (view === 'current') {
+            // Показываем текущую погоду
+            currentTab.classList.add('active');
+            forecastTab.classList.remove('active');
+            
+            // Показываем элементы текущей погоды
+            weatherDescription.style.display = 'block';
+            weatherRecommendation.style.display = 'block';
+            
+            // Скрываем прогноз, если он есть
+            if (forecastElement) forecastElement.style.display = 'none';
+            
+            // Обновляем данные текущей погоды
+            this.updateWeatherUI();
+        } else {
+            // Показываем прогноз
+            forecastTab.classList.add('active');
+            currentTab.classList.remove('active');
+            
+            // Скрываем элементы текущей погоды
+            weatherDescription.style.display = 'none';
+            weatherRecommendation.style.display = 'none';
+            
+            // Показываем прогноз
+            if (forecastElement) forecastElement.style.display = 'block';
+            else this.updateForecastUI(); // Создаем элемент прогноза, если его нет
+        }
+    }
+    
     // Определение времени суток
     getDaytime() {
         const hours = new Date().getHours();
@@ -107,30 +157,39 @@ class PersonalizationModule {
         
         // Отображаем индикатор загрузки
         document.getElementById('weather-temp').textContent = 'Загрузка...';
-        document.getElementById('weather-icon').textContent = '🔄';
+        document.getElementById('weather-icon').textContent = '��';
         
-        fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=ru&appid=${this.weatherApiKey}`)
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error(`Ошибка HTTP: ${response.status}`);
-                }
-                return response.json();
-            })
-            .then(data => {
-                console.log('Погодные данные получены:', data);
-                this.weatherData = data;
-                this.updateWeatherUI();
-                this.updateRecommendations();
-            })
-            .catch(error => {
-                console.error('Ошибка при загрузке погоды:', error);
-                document.getElementById('weather-temp').textContent = 'Не удалось загрузить погоду';
-                document.getElementById('weather-icon').textContent = '⚠️';
-                document.getElementById('weather-description').textContent = 'Проверьте подключение к интернету';
-                
-                // Используем заглушку для демонстрации
-                this.useWeatherFallback();
-            });
+        // Загружаем текущую погоду и прогноз
+        Promise.all([
+            // Текущая погода
+            fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&units=metric&lang=ru&appid=${this.weatherApiKey}`),
+            // Почасовой прогноз
+            fetch(`https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=metric&lang=ru&appid=${this.weatherApiKey}`)
+        ])
+        .then(responses => {
+            // Проверяем, что оба запроса успешны
+            if (!responses[0].ok || !responses[1].ok) {
+                throw new Error(`Ошибка HTTP: ${responses[0].status} / ${responses[1].status}`);
+            }
+            return Promise.all(responses.map(response => response.json()));
+        })
+        .then(data => {
+            console.log('Погодные данные получены:', data);
+            this.weatherData = data[0]; // Текущая погода
+            this.forecastData = data[1]; // Прогноз
+            this.updateWeatherUI();
+            this.updateForecastUI(); // Отображаем прогноз
+            this.updateRecommendations();
+        })
+        .catch(error => {
+            console.error('Ошибка при загрузке погоды:', error);
+            document.getElementById('weather-temp').textContent = 'Не удалось загрузить погоду';
+            document.getElementById('weather-icon').textContent = '⚠️';
+            document.getElementById('weather-description').textContent = 'Проверьте подключение к интернету';
+            
+            // Используем заглушку для демонстрации
+            this.useWeatherFallback();
+        });
     }
     
     // Заглушка с погодными данными на случай ошибки
@@ -139,7 +198,46 @@ class PersonalizationModule {
             main: { temp: 15 },
             weather: [{ id: 800, description: 'ясно', icon: '01d' }]
         };
+        
+        // Создаем заглушку для прогноза на 6 часов
+        const currentTime = Math.floor(Date.now()/1000);
+        this.forecastData = {
+            list: [
+                {
+                    dt: currentTime + 3600*1,
+                    main: { temp: 15 },
+                    weather: [{ id: 800, description: 'ясно', icon: '01d' }]
+                },
+                {
+                    dt: currentTime + 3600*2,
+                    main: { temp: 16 },
+                    weather: [{ id: 801, description: 'малооблачно', icon: '02d' }]
+                },
+                {
+                    dt: currentTime + 3600*3,
+                    main: { temp: 16 },
+                    weather: [{ id: 802, description: 'переменная облачность', icon: '03d' }]
+                },
+                {
+                    dt: currentTime + 3600*4,
+                    main: { temp: 17 },
+                    weather: [{ id: 803, description: 'облачно с прояснениями', icon: '04d' }]
+                },
+                {
+                    dt: currentTime + 3600*5,
+                    main: { temp: 17 },
+                    weather: [{ id: 500, description: 'небольшой дождь', icon: '10d' }]
+                },
+                {
+                    dt: currentTime + 3600*6,
+                    main: { temp: 16 },
+                    weather: [{ id: 500, description: 'небольшой дождь', icon: '10d' }]
+                }
+            ]
+        };
+        
         this.updateWeatherUI();
+        this.updateForecastUI();
         this.updateRecommendations();
     }
     
@@ -154,6 +252,71 @@ class PersonalizationModule {
         document.getElementById('weather-icon').textContent = weatherIcon;
         document.getElementById('weather-temp').textContent = `${temp}°C`;
         document.getElementById('weather-description').textContent = description.charAt(0).toUpperCase() + description.slice(1);
+    }
+    
+    // Обновление UI с прогнозом погоды
+    updateForecastUI() {
+        if (!this.forecastData || !this.forecastData.list) return;
+        
+        // Создаем или обновляем элемент прогноза
+        let forecastElement = document.getElementById('weather-forecast');
+        
+        if (!forecastElement) {
+            forecastElement = document.createElement('div');
+            forecastElement.id = 'weather-forecast';
+            forecastElement.className = 'weather-forecast';
+            document.getElementById('weather-box').appendChild(forecastElement);
+        }
+        
+        // Создаем HTML для почасового прогноза на 6 часов вперед
+        let forecastHTML = '<div class="forecast-header"><span class="forecast-time">Прогноз на 6 часов</span></div>';
+        forecastHTML += '<div class="hourly-forecast-container">';
+        
+        // Получаем прогнозы на ближайшие 6 часов (обычно это первые 6 элементов в списке)
+        const forecasts = this.forecastData.list.slice(0, 6);
+        
+        // Перебираем каждый час
+        forecasts.forEach((forecast, index) => {
+            // Пропускаем, если нет данных
+            if (!forecast) return;
+            
+            // Форматируем время
+            const forecastTime = new Date(forecast.dt * 1000);
+            const hours = forecastTime.getHours();
+            const timeStr = `${hours}:00`;
+            
+            const temp = Math.round(forecast.main.temp);
+            const description = forecast.weather[0].description;
+            const weatherIcon = this.getWeatherIcon(forecast.weather[0].icon);
+            
+            // Создаем HTML для каждого часа
+            forecastHTML += `
+                <div class="hourly-forecast-item">
+                    <div class="hourly-forecast-time">${timeStr}</div>
+                    <div class="hourly-forecast-icon">${weatherIcon}</div>
+                    <div class="hourly-forecast-temp">${temp}°C</div>
+                    <div class="hourly-forecast-desc">${description.charAt(0).toUpperCase() + description.slice(1)}</div>
+                </div>
+            `;
+        });
+        
+        forecastHTML += '</div>';
+        forecastElement.innerHTML = forecastHTML;
+        
+        // Проверяем, какая вкладка активна
+        const forecastTab = document.getElementById('weather-tab-forecast');
+        if (forecastTab && !forecastTab.classList.contains('active')) {
+            // Если вкладка прогноза не активна, скрываем элемент
+            forecastElement.style.display = 'none';
+        } else {
+            // Если вкладка прогноза активна, показываем его и скрываем текущую погоду
+            forecastElement.style.display = 'block';
+            const weatherDescription = document.getElementById('weather-description');
+            const weatherRecommendation = document.getElementById('weather-recommendation');
+            
+            if (weatherDescription) weatherDescription.style.display = 'none';
+            if (weatherRecommendation) weatherRecommendation.style.display = 'none';
+        }
     }
     
     // Выбор эмодзи по коду погоды с OpenWeatherMap

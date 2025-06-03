@@ -325,7 +325,7 @@ function createHeatmap(metric) {
                 
             } else {
                 // 5. Создаем сетку точек внутри полигона для карты рейтинга
-                const gridSize = 0.0008; // ~80м, уменьшаем шаг сетки для более точного покрытия
+                const gridSize = 0.0012; // Увеличиваем шаг сетки с 0.0008 до 0.0012
                 const gridPoints = [];
                 
                 // Анализируем распределение точек для определения адаптивного радиуса
@@ -413,17 +413,17 @@ function createHeatmap(metric) {
                         // От ярко-красного до оранжевого
                         const r = 255;
                         const g = Math.round(100 + 155 * (normalizedValue / 0.4));
-                        return `rgba(${r}, ${g}, 0, 0.95)`;
+                        return `rgba(${r}, ${g}, 0, 0.65)`;
                     } else if (normalizedValue < 0.7) {
                         // От оранжевого до желтого
                         const r = 255;
                         const g = Math.round(200 + 55 * (normalizedValue - 0.4) / 0.3);
-                        return `rgba(${r}, ${g}, 0, 0.95)`;
+                        return `rgba(${r}, ${g}, 0, 0.65)`;
                     } else {
                         // От желтого до ярко-зеленого
                         const r = Math.round(255 * (1 - (normalizedValue - 0.7) / 0.3));
                         const g = 255;
-                        return `rgba(${r}, ${g}, 0, 0.95)`;
+                        return `rgba(${r}, ${g}, 0, 0.65)`;
                     }
                 };
                 
@@ -440,7 +440,7 @@ function createHeatmap(metric) {
                 gridPoints.forEach(point => {
                     // Радиус влияния точки зависит от плотности точек в этой области
                     // Если точек много, уменьшаем радиус, если мало - делаем радиус меньше
-                    const baseRadius = 30;
+                    const baseRadius = 15; // Значительно уменьшаем базовый радиус
                     const pointRadius = point.pointDensity > 3 ? 
                         baseRadius * 0.9 : 
                         (point.pointDensity === 1 ? baseRadius * 0.7 : baseRadius);
@@ -454,7 +454,7 @@ function createHeatmap(metric) {
                     // Центр градиента - цвет в зависимости от значения
                     gradient.addColorStop(0, getRatingColor(point.value));
                     // Промежуточная точка для более плавного затухания
-                    gradient.addColorStop(0.85, getRatingColor(point.value).replace('0.95', '0.5'));
+                    gradient.addColorStop(0.85, getRatingColor(point.value).replace('0.65', '0.3'));
                     // Края градиента - прозрачные
                     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                     
@@ -466,8 +466,8 @@ function createHeatmap(metric) {
                     
                     // Добавляем яркий центр для увеличения контраста
                     heatCtx.beginPath();
-                    heatCtx.fillStyle = getRatingColor(point.value);
-                    heatCtx.arc(point.x, point.y, pointRadius * 0.25, 0, Math.PI * 2);
+                    heatCtx.fillStyle = getRatingColor(point.value).replace('0.65', '0.8');
+                    heatCtx.arc(point.x, point.y, pointRadius * 0.15, 0, Math.PI * 2);
                     heatCtx.fill();
                 });
                 
@@ -572,6 +572,29 @@ function addPointMarkers(points, type, metric) {
         }
     }
     
+    // Функция для отображения звездочек рейтинга
+    function getRatingStars(rating) {
+        const fullStars = Math.floor(rating);
+        const halfStar = rating % 1 >= 0.5;
+        const emptyStars = 5 - fullStars - (halfStar ? 1 : 0);
+        
+        let stars = '';
+        // Полные звезды
+        for (let i = 0; i < fullStars; i++) {
+            stars += '★';
+        }
+        // Половина звезды
+        if (halfStar) {
+            stars += '✭';
+        }
+        // Пустые звезды
+        for (let i = 0; i < emptyStars; i++) {
+            stars += '☆';
+        }
+        
+        return `<span style="color: gold;">${stars}</span>`;
+    }
+    
     // Получаем базовый цвет для типа объекта
     const typeColor = getTypeColor(type);
     const typeSymbol = getTypeSymbol(type);
@@ -618,12 +641,36 @@ function addPointMarkers(points, type, metric) {
         
         // Добавляем попап с информацией
         marker.bindPopup(`
-            <div style="text-align: center;">
-                <div style="font-size: 18px; margin-bottom: 5px;">${typeSymbol}</div>
-                <b>${type}</b><br>
-                ${isRating ? `Рейтинг: <b>${point.value.toFixed(1)}</b>` : `Количество: <b>${point.count || 1}</b>`}
-                ${point.name ? `<br>Название: <b>${point.name}</b>` : ''}
-                ${point.address ? `<br>Адрес: ${point.address}` : ''}
+            <div style="text-align: left; min-width: 220px; padding: 8px;">
+                <div style="display: flex; align-items: center; margin-bottom: 8px; border-bottom: 1px solid #eee; padding-bottom: 8px;">
+                    <div style="font-size: 24px; margin-right: 10px;">${typeSymbol}</div>
+                    <div style="flex: 1;">
+                        ${point.name 
+                            ? `<h3 style="margin: 0 0 5px 0; color: #333; font-size: 16px; font-weight: bold;">${point.name}</h3>` 
+                            : `<h3 style="margin: 0 0 5px 0; color: #333; font-size: 16px;">${type.charAt(0).toUpperCase() + type.slice(1)}</h3>`}
+                        ${isRating 
+                            ? `<div style="font-weight: bold; color: ${markerColor}; font-size: 14px;">
+                                <span style="display: inline-block; margin-right: 5px;">Рейтинг:</span> 
+                                ${point.value.toFixed(1)} ${getRatingStars(point.value)}
+                              </div>` 
+                            : `<div style="font-size: 14px;">Количество: <b>${point.count || 1}</b></div>`}
+                    </div>
+                </div>
+                ${point.address 
+                    ? `<div style="margin: 5px 0; font-size: 13px; background-color: #f5f5f5; padding: 5px; border-radius: 4px;">
+                        <strong>Адрес:</strong> ${point.address}
+                      </div>` 
+                    : ''}
+                ${point.phone 
+                    ? `<div style="margin: 5px 0; font-size: 13px;">
+                        <strong>Телефон:</strong> ${point.phone}
+                      </div>` 
+                    : ''}
+                ${point.hours 
+                    ? `<div style="margin: 5px 0; font-size: 13px;">
+                        <strong>Часы работы:</strong> ${point.hours}
+                      </div>` 
+                    : ''}
             </div>
         `);
         

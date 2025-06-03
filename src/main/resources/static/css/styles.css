@@ -366,6 +366,150 @@ input[type="radio"]:checked::before {
     color: var(--accent-color);
 }
 
+/* Стили для прогноза погоды */
+.weather-forecast {
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(var(--background-rgb), 0.8);
+}
+
+.forecast-header {
+    margin-bottom: 10px;
+}
+
+.forecast-time {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: var(--accent-color);
+}
+
+/* Стили для почасового прогноза */
+.hourly-forecast-container {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 8px;
+    margin: 0 -5px;
+    padding: 5px;
+    scrollbar-width: thin;
+    -webkit-overflow-scrolling: touch;
+}
+
+.hourly-forecast-container::-webkit-scrollbar {
+    height: 4px;
+    background: transparent;
+}
+
+.hourly-forecast-container::-webkit-scrollbar-thumb {
+    background: var(--accent-color);
+    border-radius: 4px;
+}
+
+.hourly-forecast-item {
+    flex: 0 0 auto;
+    min-width: 60px;
+    background-color: rgba(var(--background-rgb), 0.8);
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+    box-shadow: 2px 2px 5px var(--shadow-dark), 
+                -2px -2px 5px var(--shadow-light);
+    transition: transform 0.2s ease;
+}
+
+.hourly-forecast-item:hover {
+    transform: translateY(-2px);
+}
+
+.hourly-forecast-time {
+    font-size: 0.75em;
+    font-weight: 500;
+    margin-bottom: 5px;
+    color: var(--accent-color);
+}
+
+.hourly-forecast-icon {
+    font-size: 1.2em;
+    margin: 5px 0;
+}
+
+.hourly-forecast-temp {
+    font-size: 0.9em;
+    font-weight: 500;
+    margin: 5px 0;
+}
+
+.hourly-forecast-desc {
+    font-size: 0.7em;
+    margin-top: 5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.forecast-content {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.forecast-icon {
+    font-size: 1.3em;
+    margin-right: 8px;
+}
+
+.forecast-temp {
+    font-size: 1.1em;
+    font-weight: 500;
+    margin-right: 8px;
+}
+
+.forecast-desc {
+    font-size: 0.85em;
+    margin-top: 4px;
+    width: 100%;
+}
+
+/* Стили для переключателя погоды */
+.weather-controls {
+    margin-top: 10px;
+}
+
+.weather-tabs {
+    display: flex;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: inset 2px 2px 5px var(--shadow-dark), 
+                inset -2px -2px 5px var(--shadow-light);
+}
+
+.weather-tab {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 6px 0;
+    font-size: 0.8em;
+    cursor: pointer;
+    text-align: center;
+    color: var(--text-color);
+    transition: all 0.3s ease;
+}
+
+.weather-tab:first-child {
+    border-right: 1px solid rgba(0,0,0,0.1);
+}
+
+.weather-tab.active {
+    background-color: var(--accent-color);
+    color: white;
+    box-shadow: none;
+}
+
+.weather-tab:hover:not(.active) {
+    background-color: rgba(var(--background-rgb), 0.5);
+}
+
 /* Модальные окна */
 .neo-modal-container {
     position: fixed;

@@ -313,6 +313,8 @@ public class ApiController {
             if ("density".equals(metric)) {
                 // Для метрики плотности создаем сетку
                 Map<String, Integer> grid = new HashMap<>();
+                // Сохраняем информацию о точках для каждой ячейки сетки
+                Map<String, List<PointOfInterest>> cellPointsMap = new HashMap<>();
                 
                 // Для разных типов мест используем разные размеры сетки
                 double gridSize;
@@ -339,6 +341,12 @@ public class ApiController {
                     String gridKey = Math.round(poi.getLatitude() / gridSize) + ":" + 
                                     Math.round(poi.getLongitude() / gridSize);
                     grid.put(gridKey, grid.getOrDefault(gridKey, 0) + 1);
+                    
+                    // Сохраняем точку в списке для этой ячейки
+                    if (!cellPointsMap.containsKey(gridKey)) {
+                        cellPointsMap.put(gridKey, new ArrayList<>());
+                    }
+                    cellPointsMap.get(gridKey).add(poi);
                 }
                 
                 // Преобразуем сетку в точки для тепловой карты
@@ -351,6 +359,36 @@ public class ApiController {
                     point.put("lat", lat);
                     point.put("lng", lng);
                     point.put("value", cell.getValue()); // Количество точек в ячейке
+                    
+                    // Добавляем информацию о точках в этой ячейке
+                    List<PointOfInterest> cellPoints = cellPointsMap.get(cell.getKey());
+                    if (cellPoints != null && !cellPoints.isEmpty()) {
+                        // Добавляем название и адрес первой точки в ячейке как пример
+                        PointOfInterest sample = cellPoints.get(0);
+                        point.put("name", type.substring(0, 1).toUpperCase() + type.substring(1) + " (" + cell.getValue() + ")");
+                        
+                        // Адрес может быть в поле address или vicinity
+                        if (sample.getAddress() != null && !sample.getAddress().isEmpty()) {
+                            point.put("address", sample.getAddress());
+                        } else if (sample.getVicinity() != null && !sample.getVicinity().isEmpty()) {
+                            point.put("address", sample.getVicinity());
+                        }
+                        
+                        // Сохраняем количество точек в ячейке
+                        point.put("count", cell.getValue());
+                        
+                        // Добавляем список имен всех точек в ячейке
+                        List<String> pointNames = new ArrayList<>();
+                        for (PointOfInterest p : cellPoints) {
+                            if (p.getName() != null && !p.getName().isEmpty()) {
+                                pointNames.add(p.getName());
+                            }
+                        }
+                        if (!pointNames.isEmpty()) {
+                            point.put("pointNames", pointNames);
+                        }
+                    }
+                    
                     points.add(point);
                 }
                 
@@ -364,6 +402,22 @@ public class ApiController {
                     
                     double value = poi.getRating() != null ? poi.getRating() : 3.0; // По умолчанию средний рейтинг
                     point.put("value", value);
+                    
+                    // Добавляем название и адрес для отображения в попапе
+                    point.put("name", poi.getName());
+                    
+                    // Адрес может быть в поле address или vicinity
+                    if (poi.getAddress() != null && !poi.getAddress().isEmpty()) {
+                        point.put("address", poi.getAddress());
+                    } else if (poi.getVicinity() != null && !poi.getVicinity().isEmpty()) {
+                        point.put("address", poi.getVicinity());
+                    }
+                    
+                    // Добавляем URL фотографии, если есть
+                    if (poi.getPhotoUrl() != null && !poi.getPhotoUrl().isEmpty()) {
+                        point.put("photoUrl", poi.getPhotoUrl());
+                    }
+                    
                     points.add(point);
                 }
                 

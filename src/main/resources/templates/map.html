@@ -8,7 +8,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap">
     <link rel="stylesheet" href="/css/styles.css">
-    <script src="/js/heatmap.js" defer></script>
+    <script src="/js/heatmap.js?v=1.2" defer></script>
     <script src="/js/thematic-route.js" defer></script>
     <script src="/js/cultural-route.js" defer></script>
     <script src="/js/personalization.js" defer></script>
@@ -33,7 +33,6 @@
                 <p class="user-greeting">Привет, <span id="user-name">Пользователь</span>!</p>
                 <div class="profile-buttons">
                     <button id="saved-routes" class="neo-button">Сохраненные маршруты</button>
-                    <button id="preferences" class="neo-button">Предпочтения</button>
                     <button id="logout-btn" onclick="logout();" class="neo-button danger">Выход</button>
                 </div>
             </div>
@@ -196,30 +195,7 @@
             </p>
         </div>
 
-        <h3>Время и темп маршрута</h3>
-        <div class="neo-options-group">
-            <label for="route-duration">Длительность маршрута:</label>
-            <select id="route-duration">
-                <option value="30">30 минут</option>
-                <option value="60" selected>1 час</option>
-                <option value="120">2 часа</option>
-                <option value="0">Без ограничений</option>
-            </select>
-            
-            <div class="neo-radio-group">
-                <label>Темп маршрута:</label>
-                <div class="neo-radio-options">
-                    <label class="neo-radio">
-                        <input type="radio" name="route-pace" value="relaxed" checked>
-                        <span class="radio-label">Размеренный</span>
-                    </label>
-                    <label class="neo-radio">
-                        <input type="radio" name="route-pace" value="active">
-                        <span class="radio-label">Активный</span>
-                    </label>
-                </div>
-            </div>
-        </div>
+        <!-- Переход к следующему элементу -->
     </div>
     
     <div id="map-container">
@@ -234,6 +210,12 @@
                 </div>
                 <div id="weather-description"></div>
                 <div id="weather-recommendation"></div>
+            </div>
+            <div class="weather-controls">
+                <div class="weather-tabs">
+                    <button id="weather-tab-current" class="weather-tab active">Сейчас</button>
+                    <button id="weather-tab-forecast" class="weather-tab">Прогноз</button>
+                </div>
             </div>
         </div>
         
@@ -1091,34 +1073,14 @@
         async function buildThematicRoute() {
             clearMap();
             
-            // Получаем параметры маршрута
-            const duration = parseInt(document.getElementById('route-duration').value);
-            const pace = document.querySelector('input[name="route-pace"]:checked').value;
-            const isRelaxed = pace === 'relaxed';
-            
-            // Определяем скорость движения в зависимости от темпа
-            const speed = isRelaxed ? 3 : 5; // км/ч
-            
-            // Получаем количество точек из слайдера или рассчитываем по длительности
-            let poiCount = parseInt(poiCountSlider.value);
-            
-            // Если указана длительность, корректируем количество точек
-            if (duration > 0) {
-                // Расчет максимального количества точек на основе длительности и темпа
-                // Примерно 15-20 минут на точку для размеренного темпа, 10-15 для активного
-                const minutesPerPoi = isRelaxed ? 20 : 15;
-                const recommendedCount = Math.max(3, Math.min(10, Math.floor(duration / minutesPerPoi)));
-                
-                // Если слайдер установлен на большее значение, предупреждаем пользователя
-                if (poiCount > recommendedCount) {
-                    const confirmResult = await NeoDialog.confirm('Внимание', `Для маршрута длительностью ${duration} минут при ${isRelaxed ? 'размеренном' : 'активном'} темпе рекомендуется не более ${recommendedCount} точек. Уменьшить количество точек?`);
-                    if (confirmResult) {
-                        poiCount = recommendedCount;
-                        poiCountSlider.value = poiCount;
-                        poiCountValue.textContent = poiCount;
-                    }
-                }
+            // Проверяем, установлен ли начальный маркер
+            if (!startPoint) {
+                NeoDialog.alert('Внимание', 'Сначала установите начальную точку маршрута, кликнув на карту');
+                return;
             }
+            
+            // Получаем количество точек из слайдера
+            let poiCount = parseInt(poiCountSlider.value);
             
             // Отображаем индикатор загрузки
             const loadingDiv = document.createElement('div');
@@ -1145,7 +1107,7 @@
                     margin: 0 auto 15px auto;
                     animation: spin 1s linear infinite;
                 "></div>
-                <div>Строим маршрут (${duration > 0 ? `до ${duration} минут` : 'без ограничения'}, ${isRelaxed ? 'размеренный' : 'активный'} темп)...</div>
+                <div>Строим маршрут от вашей точки...</div>
             `;
             document.body.appendChild(loadingDiv);
             
@@ -1165,7 +1127,21 @@
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
                 
-                const pois = await response.json();
+                let pois = await response.json();
+                
+                // Фильтруем точки по рейтингу - оставляем только с рейтингом 4.0 и выше
+                const highRatedPois = pois.filter(poi => poi.rating && poi.rating >= 4.0);
+                
+                // Проверяем, остались ли точки после фильтрации
+                if (highRatedPois.length < 3) {
+                    console.log('Недостаточно точек с высоким рейтингом, используем все доступные точки');
+                    // Если точек с высоким рейтингом недостаточно, сортируем по рейтингу и берем лучшие
+                    pois.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                } else {
+                    // Используем только точки с высоким рейтингом
+                    pois = highRatedPois;
+                    console.log(`Отфильтровано ${highRatedPois.length} точек с рейтингом 4.0+`);
+                }
                 
                 if (pois.length < 3) {
                     document.body.removeChild(loadingDiv);
@@ -1176,36 +1152,46 @@
                 // Сохраняем все доступные POI для возможного перемешивания позже
                 currentPois = pois;
                 
-                // Сортируем POI по рейтингу, если доступен
-                if (pois[0] && 'rating' in pois[0]) {
-                    pois.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+                // Выбираем заданное количество случайных точек для маршрута, начиная с точек ближайших к стартовому маркеру
+                let selectedPois = [];
+                selectedPoisIndexes = new Set();
+                
+                // Сортируем точки по удаленности от стартовой точки
+                pois.forEach((poi, index) => {
+                    // Вычисляем расстояние до стартовой точки
+                    poi.distanceToStart = calculateDistance(
+                        startPoint.lat, startPoint.lng,
+                        poi.latitude, poi.longitude
+                    );
+                    poi.originalIndex = index;
+                });
+                
+                // Сортируем по расстоянию
+                pois.sort((a, b) => a.distanceToStart - b.distanceToStart);
+                
+                // Берем ближайшие точки (но не слишком близко - минимум 100 метров от старта)
+                const minDistanceKm = 0.1; // 100 метров в км
+                const nearbyPois = pois.filter(poi => poi.distanceToStart >= minDistanceKm);
+                
+                if (nearbyPois.length === 0) {
+                    // Если нет точек в пределах минимального расстояния, берем ближайшие
+                    selectedPois = pois.slice(0, Math.min(poiCount, pois.length));
+                } else {
+                    // Берем точки из отфильтрованного списка
+                    selectedPois = nearbyPois.slice(0, Math.min(poiCount, nearbyPois.length));
                 }
                 
-                // Выбираем заданное количество случайных точек для маршрута
-                let selectedPois = pois;
-                if (pois.length > poiCount) {
-                    selectedPois = [];
-                    selectedPoisIndexes = new Set();
-                    
-                    // Берем первые 2-3 точки с наивысшим рейтингом
-                    const topRatedCount = Math.min(Math.ceil(poiCount / 3), 3);
-                    for (let i = 0; i < topRatedCount && i < pois.length; i++) {
-                        selectedPoisIndexes.add(i);
-                    }
-                    
-                    // Остальные выбираем случайно
-                    while (selectedPoisIndexes.size < poiCount) {
-                        selectedPoisIndexes.add(Math.floor(Math.random() * pois.length));
-                    }
-                    
-                    selectedPoisIndexes.forEach(i => selectedPois.push(pois[i]));
-                }
+                // Обновляем индексы выбранных точек
+                selectedPois.forEach(poi => {
+                    selectedPoisIndexes.add(poi.originalIndex);
+                });
                 
-                // Формируем строку координат для запроса
-                const pointsStr = selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
+                // Формируем строку координат для запроса, начиная со стартовой точки пользователя
+                const pointsStr = `${startPoint.lat},${startPoint.lng};` + 
+                                  selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
                 
-                // Запрашиваем маршрут с учетом профиля и темпа
-                const routeResponse = await fetch(`/api/thematic-route?points=${pointsStr}&profile=${currentProfile}&duration=${duration}&pace=${pace}`);
+                // Запрашиваем маршрут
+                const routeResponse = await fetch(`/api/thematic-route?points=${pointsStr}&profile=${currentProfile}`);
                 
                 if (!routeResponse.ok) {
                     const errorText = await routeResponse.text();
@@ -1217,21 +1203,9 @@
                 // Удаляем индикатор загрузки
                 document.body.removeChild(loadingDiv);
                 
-                // Проверяем, не превышает ли маршрут заданную длительность
-                if (duration > 0 && data.paths && data.paths[0] && (data.paths[0].time / 60000) > duration * 1.2) {
-                    const confirmResult = await NeoDialog.confirm('Внимание', `Построенный маршрут превышает указанную длительность (${Math.round(data.paths[0].time / 60000)} мин. вместо ${duration} мин.). Уменьшить количество точек?`);
-                    if (confirmResult) {
-                        // Уменьшаем количество точек и пробуем построить маршрут снова
-                        poiCountSlider.value = Math.max(3, poiCount - 2);
-                        poiCountValue.textContent = poiCountSlider.value;
-                        buildThematicRoute();
-                        return;
-                    }
-                }
-                
                 // Устанавливаем информацию о типе маршрута
-                document.getElementById('route-type').textContent = `Тематический (${isRelaxed ? 'размеренном' : 'активном'} темп)`;
-                document.getElementById('route-type').style.color = isRelaxed ? '#4CAF50' : '#FF9800';
+                document.getElementById('route-type').textContent = `Тематический (только места с рейтингом 4+)`;
+                document.getElementById('route-type').style.color = '#4CAF50';
                 
                 // Отображаем маршрут и сохраняем данные для возможности сохранения
                 displayRoute(data, selectedPois);
@@ -1260,42 +1234,57 @@
                 return;
             }
             
+            // Проверяем, установлен ли начальный маркер
+            if (!startPoint) {
+                NeoDialog.alert('Внимание', 'Сначала установите начальную точку маршрута, кликнув на карту');
+                return;
+            }
+            
             clearMap();
             
             // Получаем количество точек из слайдера
             const poiCount = parseInt(poiCountSlider.value);
             
-            // Выбираем случайные точки, но другие чем раньше если возможно
-            let newIndexes = new Set();
-            let attempts = 0;
-            const maxAttempts = 50; // предотвращаем бесконечный цикл
+            // Фильтруем точки по рейтингу 4.0+
+            const highRatedPois = currentPois.filter(poi => poi.rating && poi.rating >= 4.0);
+            let pois = highRatedPois.length >= 3 ? highRatedPois : currentPois;
             
-            while (newIndexes.size < poiCount && attempts < maxAttempts) {
-                const randomIndex = Math.floor(Math.random() * currentPois.length);
-                if (!selectedPoisIndexes.has(randomIndex) || currentPois.length <= poiCount) {
-                    newIndexes.add(randomIndex);
-                }
-                attempts++;
-            }
+            // Сортируем точки по удаленности от стартового маркера
+            pois.forEach((poi, index) => {
+                poi.distanceToStart = calculateDistance(
+                    startPoint.lat, startPoint.lng,
+                    poi.latitude, poi.longitude
+                );
+                poi.originalIndex = index;
+            });
             
-            // Если не получилось найти достаточно новых индексов, добираем из старых
-            if (newIndexes.size < poiCount) {
-                selectedPoisIndexes.forEach(i => {
-                    if (newIndexes.size < poiCount) {
-                        newIndexes.add(i);
-                    }
-                });
+            // Перемешиваем точки, но сохраняем фильтрацию по расстоянию
+            const shuffled = [...pois].sort(() => Math.random() - 0.5);
+            
+            // Берем ближайшие точки, но не слишком близко к стартовой точке
+            const minDistanceKm = 0.1; // 100 метров в км
+            const eligiblePois = shuffled.filter(poi => poi.distanceToStart >= minDistanceKm);
+            
+            // Выбираем точки для маршрута
+            let selectedPois = [];
+            if (eligiblePois.length >= poiCount) {
+                selectedPois = eligiblePois.slice(0, poiCount);
+            } else {
+                // Если недостаточно точек, берем все доступные
+                selectedPois = shuffled.slice(0, Math.min(poiCount, shuffled.length));
             }
             
             // Обновляем выбранные индексы
-            selectedPoisIndexes = newIndexes;
+            selectedPoisIndexes = new Set();
+            selectedPois.forEach(poi => {
+                if (poi.originalIndex !== undefined) {
+                    selectedPoisIndexes.add(poi.originalIndex);
+                }
+            });
             
-            // Создаем новый список точек
-            const selectedPois = [];
-            selectedPoisIndexes.forEach(i => selectedPois.push(currentPois[i]));
-            
-            // Формируем строку координат для запроса
-            const pointsStr = selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
+            // Формируем строку координат для запроса, начиная со стартовой точки
+            const pointsStr = `${startPoint.lat},${startPoint.lng};` + 
+                              selectedPois.map(poi => `${poi.latitude},${poi.longitude}`).join(';');
             
             try {
                 // Отображаем индикатор загрузки
@@ -1323,7 +1312,7 @@
                         margin: 0 auto 15px auto;
                         animation: spin 1s linear infinite;
                     "></div>
-                    <div>Перемешиваем точки и строим маршрут...</div>
+                    <div>Перемешиваем точки и строим маршрут от вашей точки...</div>
                 `;
                 document.body.appendChild(loadingDiv);
                 
@@ -1339,6 +1328,11 @@
                 }
                 
                 const data = await response.json();
+                
+                // Устанавливаем информацию о типе маршрута
+                document.getElementById('route-type').textContent = `Тематический (только места с рейтингом 4+)`;
+                document.getElementById('route-type').style.color = '#4CAF50';
+                
                 displayRoute(data, selectedPois);
             } catch (error) {
                 console.error('Ошибка при получении тематического маршрута:', error);
