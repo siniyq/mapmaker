@@ -47,27 +47,22 @@ function buildCulturalThematicRoute() {
     
     // Проверяем, установлен ли начальный маркер
     if (!window.startPoint) {
-        NeoDialog.alert('Внимание', 'Сначала установите начальную точку маршрута, кликнув на карту');
+        if (typeof NeoDialog !== 'undefined') {
+            NeoDialog.alert('Внимание', 'Сначала установите начальную точку маршрута, кликнув на карту');
+        } else {
+            alert('Сначала установите начальную точку маршрута, кликнув на карту');
+        }
         return;
     }
     
-    showLoadingIndicator("Создаем культурный маршрут от вашей точки...");
+    // Показываем индикатор загрузки
+    const loadingIndicator = createLoadingIndicator("Анализируем лучшие культурные места...");
     
     // Получаем параметры маршрута
-    const count = getCulturalPoiCount(); // Используем функцию вместо прямого доступа к DOM
-    const profile = getCurrentProfile();
+    const count = getCulturalPoiCount();
     
-    console.log('Построение культурного маршрута с количеством точек:', count);
+    console.log('Построение оптимизированного культурного маршрута с количеством точек:', count);
     console.log('Стартовая точка пользователя:', window.startPoint);
-    
-    // Обновляем значение ползунка и отображаемое значение
-    const slider = document.getElementById('cultural-poi-count');
-    const displayValue = document.getElementById('cultural-poi-count-value');
-    
-    if (slider && displayValue) {
-        slider.value = count;
-        displayValue.textContent = count;
-    }
     
     // Определяем типы для включения в маршрут
     const includeMuseum = document.getElementById('include-museum')?.checked ?? true;
@@ -79,21 +74,10 @@ function buildCulturalThematicRoute() {
         selectedTypes.push(checkbox.value);
     });
     
-    // Формируем URL запроса
-    let url = `/api/cultural-thematic-route?count=${count}&includeMuseum=${includeMuseum}&includePark=${includePark}`;
+    console.log(`Параметры оптимизации: музей=${includeMuseum}, парк=${includePark}, типы=[${selectedTypes.join(', ')}]`);
     
-    // Добавляем выбранные типы, если они есть
-    if (selectedTypes.length > 0) {
-        url += `&types=${selectedTypes.join(',')}`;
-    }
-    
-    // Показываем информацию о запросе в консоли
-    console.log(`Запрос культурного маршрута: ${url}`);
-    console.log(`Количество точек: ${count}, Включать музей: ${includeMuseum}, Включать парк: ${includePark}`);
-    console.log(`Выбранные типы: ${selectedTypes.join(', ')}`);
-    
-    // Запрашиваем маршрут с сервера
-    fetch(url)
+    // Сначала получаем все доступные культурные точки
+    fetch('/api/cultural-pois')
         .then(response => {
             if (!response.ok) {
                 return response.text().then(text => { 
@@ -102,23 +86,59 @@ function buildCulturalThematicRoute() {
             }
             return response.json();
         })
-        .then(data => {
-            // Проверяем, что получены точки маршрута
-            if (!data.points || data.points.length < 2) {
-                throw new Error('Недостаточно точек для построения маршрута (нужно минимум 2)');
+        .then(allPoints => {
+            console.log(`Получено всего культурных точек: ${allPoints.length}`);
+            
+            if (!allPoints || allPoints.length === 0) {
+                throw new Error('В данном районе нет культурных достопримечательностей');
             }
             
-            // Сохраняем точки маршрута
-            window.culturalPoints = data.points;
+            // Обновляем сообщение загрузки
+            loadingIndicator.element.innerHTML = `
+                <div style="
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-top: 4px solid white;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    margin: 0 auto 15px auto;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <div>Оптимизируем маршрут по близости точек...</div>
+            `;
             
-            // Выводим информацию о маршруте
-            console.log(`Получено ${window.culturalPoints.length} точек для культурного маршрута`);
+            // Оптимизируем выбор культурных точек
+            const optimizedPoints = optimizeCulturalSelection(allPoints, count, includeMuseum, includePark, selectedTypes);
+            
+            if (optimizedPoints.length === 0) {
+                throw new Error('Нет подходящих культурных мест в радиусе поиска');
+            }
+            
+            // Сохраняем оптимизированные точки
+            window.culturalPoints = optimizedPoints;
+            
+            // Выводим информацию о выбранных точках
+            console.log(`Оптимизировано до ${window.culturalPoints.length} лучших точек:`);
             window.culturalPoints.forEach((point, index) => {
-                console.log(`Точка ${index+1}: ${point.name} (${point.type}), рейтинг: ${point.rating}`);
+                console.log(`  ${index+1}. ${point.name} (${point.type}) - расстояние: ${point.distanceToStart?.toFixed(2)}км`);
             });
             
             // Обновляем сообщение о загрузке
-            showLoadingIndicator("Строим маршрут от вашей точки...");
+            loadingIndicator.element.innerHTML = `
+                <div style="
+                    border: 4px solid rgba(255, 255, 255, 0.3);
+                    border-top: 4px solid white;
+                    border-radius: 50%;
+                    width: 40px;
+                    height: 40px;
+                    margin: 0 auto 15px auto;
+                    animation: spin 1s linear infinite;
+                "></div>
+                <div>Строим оптимизированный маршрут от вашей точки...</div>
+            `;
+            
+            // Определяем профиль маршрута
+            const profile = getCurrentProfile();
             
             // Формируем строку координат для запроса маршрута, НАЧИНАЯ СО СТАРТОВОЙ ТОЧКИ ПОЛЬЗОВАТЕЛЯ
             const pointsStr = `${window.startPoint.lat},${window.startPoint.lng};` + 
@@ -141,13 +161,16 @@ function buildCulturalThematicRoute() {
         })
         .then(routeData => {
             // Скрываем индикатор загрузки
-            hideLoadingIndicator();
+            loadingIndicator.remove();
+            
+            // Получаем профиль для передачи в функцию отображения
+            const profile = getCurrentProfile();
             
             // Отображаем маршрут
             displayCulturalRoute(routeData, window.culturalPoints, profile);
         })
         .catch(error => {
-            hideLoadingIndicator();
+            loadingIndicator.remove();
             console.error('Ошибка при построении культурного маршрута:', error);
             
             // Используем NeoDialog вместо alert для консистентности
@@ -157,6 +180,166 @@ function buildCulturalThematicRoute() {
                 alert(`Ошибка: ${error.message}`);
             }
         });
+}
+
+/**
+ * Оптимизирует выбор культурных точек только по близости к стартовой точке и близости друг к другу
+ */
+function optimizeCulturalSelection(allPoints, count, includeMuseum, includePark, selectedTypes) {
+    console.log('Начинаем оптимизацию культурных точек по близости...');
+    console.log(`Параметры: count=${count}, includeMuseum=${includeMuseum}, includePark=${includePark}`);
+    
+    // Вычисляем расстояние от каждой точки до стартовой точки пользователя
+    allPoints.forEach(point => {
+        const distance = calculateDistance(
+            window.startPoint.lat, window.startPoint.lng,
+            point.latitude, point.longitude
+        );
+        point.distanceToStart = distance;
+    });
+    
+    // Сортируем все точки по близости к стартовой точке
+    const pointsByDistance = [...allPoints].sort((a, b) => a.distanceToStart - b.distanceToStart);
+    
+    console.log('Топ-10 ближайших точек к стартовой позиции:');
+    pointsByDistance.slice(0, 10).forEach((point, index) => {
+        console.log(`  ${index+1}. ${point.name} (${point.type}) - расстояние: ${point.distanceToStart.toFixed(2)}км`);
+    });
+    
+    // Применяем жадный алгоритм построения маршрута по близости
+    let selectedPoints = [];
+    let availablePoints = [...allPoints];
+    
+    // Обязательно включаем музей, если требуется (выбираем ближайший к стартовой точке)
+    if (includeMuseum && selectedPoints.length < count) {
+        const museums = availablePoints.filter(p => p.type === 'museum')
+                                      .sort((a, b) => a.distanceToStart - b.distanceToStart);
+        if (museums.length > 0) {
+            selectedPoints.push(museums[0]);
+            availablePoints = availablePoints.filter(p => p.id !== museums[0].id);
+            console.log(`Добавлен ближайший музей: ${museums[0].name} (${museums[0].distanceToStart.toFixed(2)}км)`);
+        }
+    }
+    
+    // Обязательно включаем парк, если требуется (выбираем ближайший к стартовой точке)
+    if (includePark && selectedPoints.length < count) {
+        const parks = availablePoints.filter(p => p.type === 'park')
+                                    .sort((a, b) => a.distanceToStart - b.distanceToStart);
+        if (parks.length > 0) {
+            selectedPoints.push(parks[0]);
+            availablePoints = availablePoints.filter(p => p.id !== parks[0].id);
+            console.log(`Добавлен ближайший парк: ${parks[0].name} (${parks[0].distanceToStart.toFixed(2)}км)`);
+        }
+    }
+    
+    // Добавляем точки выбранных типов (выбираем ближайшие к стартовой точке)
+    for (const type of selectedTypes) {
+        if (selectedPoints.length >= count) break;
+        
+        const typePoints = availablePoints.filter(p => p.type === type)
+                                         .sort((a, b) => a.distanceToStart - b.distanceToStart);
+        if (typePoints.length > 0) {
+            selectedPoints.push(typePoints[0]);
+            availablePoints = availablePoints.filter(p => p.id !== typePoints[0].id);
+            console.log(`Добавлена ближайшая точка типа ${type}: ${typePoints[0].name} (${typePoints[0].distanceToStart.toFixed(2)}км)`);
+        }
+    }
+    
+    // Если уже выбрали точки, применяем жадный алгоритм для добавления остальных
+    if (selectedPoints.length > 0) {
+        // Дополняем до нужного количества, выбирая ближайшие к уже выбранным точкам
+        while (selectedPoints.length < count && availablePoints.length > 0) {
+            let bestPoint = null;
+            let bestDistance = Infinity;
+            
+            // Для каждой доступной точки находим минимальное расстояние до любой уже выбранной точки
+            for (const candidate of availablePoints) {
+                let minDistanceToSelected = Infinity;
+                
+                for (const selected of selectedPoints) {
+                    const distance = calculateDistance(
+                        selected.latitude, selected.longitude,
+                        candidate.latitude, candidate.longitude
+                    );
+                    minDistanceToSelected = Math.min(minDistanceToSelected, distance);
+                }
+                
+                // Выбираем точку с минимальным расстоянием до уже выбранных
+                if (minDistanceToSelected < bestDistance) {
+                    bestDistance = minDistanceToSelected;
+                    bestPoint = candidate;
+                }
+            }
+            
+            if (bestPoint) {
+                selectedPoints.push(bestPoint);
+                availablePoints = availablePoints.filter(p => p.id !== bestPoint.id);
+                console.log(`Добавлена ближайшая к маршруту точка: ${bestPoint.name} (расстояние до ближайшей: ${bestDistance.toFixed(2)}км)`);
+            } else {
+                break;
+            }
+        }
+    } else {
+        // Если не выбрано ни одной точки по типам, начинаем с ближайшей к стартовой точке
+        while (selectedPoints.length < count && availablePoints.length > 0) {
+            if (selectedPoints.length === 0) {
+                // Первая точка - ближайшая к стартовой
+                const closestToStart = availablePoints.reduce((closest, current) => 
+                    current.distanceToStart < closest.distanceToStart ? current : closest
+                );
+                selectedPoints.push(closestToStart);
+                availablePoints = availablePoints.filter(p => p.id !== closestToStart.id);
+                console.log(`Первая точка (ближайшая к старту): ${closestToStart.name} (${closestToStart.distanceToStart.toFixed(2)}км)`);
+            } else {
+                // Последующие точки - ближайшие к уже выбранным
+                let bestPoint = null;
+                let bestDistance = Infinity;
+                
+                for (const candidate of availablePoints) {
+                    let minDistanceToSelected = Infinity;
+                    
+                    for (const selected of selectedPoints) {
+                        const distance = calculateDistance(
+                            selected.latitude, selected.longitude,
+                            candidate.latitude, candidate.longitude
+                        );
+                        minDistanceToSelected = Math.min(minDistanceToSelected, distance);
+                    }
+                    
+                    if (minDistanceToSelected < bestDistance) {
+                        bestDistance = minDistanceToSelected;
+                        bestPoint = candidate;
+                    }
+                }
+                
+                if (bestPoint) {
+                    selectedPoints.push(bestPoint);
+                    availablePoints = availablePoints.filter(p => p.id !== bestPoint.id);
+                    console.log(`Добавлена точка: ${bestPoint.name} (расстояние до ближайшей: ${bestDistance.toFixed(2)}км)`);
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+    
+    console.log(`Финальный выбор: ${selectedPoints.length} оптимизированных по близости точек`);
+    
+    return selectedPoints;
+}
+
+/**
+ * Вычисляет расстояние между двумя точками в километрах (формула Haversine)
+ */
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Радиус Земли в км
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
 /**
@@ -256,10 +439,6 @@ function updateCulturalRouteInfo(points, routePath, profile) {
     points.forEach((point, index) => {
         let poiDescription = `<li><b>${point.name}</b> - ${getReadableType(point.type)}`;
         
-        if (point.rating) {
-            poiDescription += `, рейтинг: ${point.rating.toFixed(1)}`;
-        }
-        
         if (point.vicinity) {
             poiDescription += `, район: ${point.vicinity}`;
         }
@@ -288,7 +467,7 @@ function updateCulturalRouteInfo(points, routePath, profile) {
     descriptionHtml += `<div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
         <p><b>Общая длина маршрута:</b> ${distanceKm} км</p>
         <p><b>Примерное время:</b> ${timeMin} мин ${profile === 'foot' ? 'пешком' : (profile === 'bike' ? 'на велосипеде' : 'на автомобиле')}</p>
-        <p><b>Тип маршрута:</b> Культурный (от вашей точки)</p>
+        <p><b>Тип маршрута:</b> Оптимизированный культурный (по близости точек)</p>
     </div>`;
     
     routeDescription.innerHTML = descriptionHtml;
@@ -314,7 +493,6 @@ function createCulturalPopupContent(point, index) {
         <div class="popup-content">
             <h3>${index}. ${point.name}</h3>
             <p><strong>Тип:</strong> ${getReadableType(point.type)}</p>
-            <p><strong>Рейтинг:</strong> ${point.rating ? point.rating.toFixed(1) : 'Нет данных'}</p>
     `;
     
     // Добавляем адрес или местоположение, если они есть
@@ -521,73 +699,6 @@ function getColorForType(type) {
 }
 
 /**
- * Показывает индикатор загрузки с указанным сообщением
- */
-function showLoadingIndicator(message) {
-    // Проверяем, существует ли уже индикатор загрузки
-    let loadingIndicator = document.getElementById('loading-indicator');
-    
-    if (!loadingIndicator) {
-        // Создаем новый индикатор загрузки
-        loadingIndicator = document.createElement('div');
-        loadingIndicator.id = 'loading-indicator';
-        loadingIndicator.className = 'loading-indicator';
-        
-        // Стили для индикатора
-        loadingIndicator.style.position = 'fixed';
-        loadingIndicator.style.top = '50%';
-        loadingIndicator.style.left = '50%';
-        loadingIndicator.style.transform = 'translate(-50%, -50%)';
-        loadingIndicator.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        loadingIndicator.style.color = 'white';
-        loadingIndicator.style.padding = '20px';
-        loadingIndicator.style.borderRadius = '10px';
-        loadingIndicator.style.zIndex = '1000';
-        loadingIndicator.style.textAlign = 'center';
-        
-        // Добавляем индикатор в DOM
-        document.body.appendChild(loadingIndicator);
-    }
-    
-    // Устанавливаем содержимое индикатора
-    loadingIndicator.innerHTML = `
-        <div style="
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            margin: 0 auto 15px auto;
-            animation: spin 1s linear infinite;
-        "></div>
-        <div>${message || 'Загрузка...'}</div>
-    `;
-    
-    // Добавляем стиль анимации, если его еще нет
-    if (!document.getElementById('loading-animation-style')) {
-        const style = document.createElement('style');
-        style.id = 'loading-animation-style';
-        style.textContent = `
-            @keyframes spin {
-                0% { transform: rotate(0deg); }
-                100% { transform: rotate(360deg); }
-            }
-        `;
-        document.head.appendChild(style);
-    }
-}
-
-/**
- * Скрывает индикатор загрузки
- */
-function hideLoadingIndicator() {
-    const loadingIndicator = document.getElementById('loading-indicator');
-    if (loadingIndicator) {
-        document.body.removeChild(loadingIndicator);
-    }
-}
-
-/**
  * Возвращает текущий выбранный профиль маршрута (пешком, велосипед, авто)
  */
 function getCurrentProfile() {
@@ -755,4 +866,25 @@ function debugCulturalControls() {
     });
     
     console.log('--- Конец отладки ---');
+}
+
+/**
+ * Показывает индикатор загрузки с указанным сообщением
+ * @deprecated Используйте createLoadingIndicator из route-utils.js
+ */
+function showLoadingIndicator(message) {
+    console.warn('showLoadingIndicator deprecated, используйте createLoadingIndicator из route-utils.js');
+    return createLoadingIndicator(message);
+}
+
+/**
+ * Скрывает индикатор загрузки
+ * @deprecated Используйте loadingIndicator.remove() из createLoadingIndicator
+ */
+function hideLoadingIndicator() {
+    console.warn('hideLoadingIndicator deprecated, используйте loadingIndicator.remove()');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    if (loadingIndicator) {
+        document.body.removeChild(loadingIndicator);
+    }
 } 
