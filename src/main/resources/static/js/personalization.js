@@ -8,6 +8,7 @@ class PersonalizationModule {
         this.weatherData = null;
         this.forecastData = null;
         this.daytime = this.getDaytime();
+        this.isModalOpening = false; // Флаг для предотвращения множественных окон
         
         // API ключ для OpenWeatherMap
         this.weatherApiKey = "5f472b7acba333cd8a035ea85a0d4d4c"; // Публичный ключ для тестирования
@@ -170,26 +171,26 @@ class PersonalizationModule {
             // Проверяем, что оба запроса успешны
             if (!responses[0].ok || !responses[1].ok) {
                 throw new Error(`Ошибка HTTP: ${responses[0].status} / ${responses[1].status}`);
-            }
+                }
             return Promise.all(responses.map(response => response.json()));
-        })
-        .then(data => {
-            console.log('Погодные данные получены:', data);
+            })
+            .then(data => {
+                console.log('Погодные данные получены:', data);
             this.weatherData = data[0]; // Текущая погода
             this.forecastData = data[1]; // Прогноз
-            this.updateWeatherUI();
+                this.updateWeatherUI();
             this.updateForecastUI(); // Отображаем прогноз
-            this.updateRecommendations();
-        })
-        .catch(error => {
-            console.error('Ошибка при загрузке погоды:', error);
-            document.getElementById('weather-temp').textContent = 'Не удалось загрузить погоду';
-            document.getElementById('weather-icon').textContent = '⚠️';
-            document.getElementById('weather-description').textContent = 'Проверьте подключение к интернету';
-            
-            // Используем заглушку для демонстрации
-            this.useWeatherFallback();
-        });
+                this.updateRecommendations();
+            })
+            .catch(error => {
+                console.error('Ошибка при загрузке погоды:', error);
+                document.getElementById('weather-temp').textContent = 'Не удалось загрузить погоду';
+                document.getElementById('weather-icon').textContent = '⚠️';
+                document.getElementById('weather-description').textContent = 'Проверьте подключение к интернету';
+                
+                // Используем заглушку для демонстрации
+                this.useWeatherFallback();
+            });
     }
     
     // Заглушка с погодными данными на случай ошибки
@@ -581,18 +582,23 @@ class PersonalizationModule {
     }
     
     showSavedRoutes() {
+        // Блокировка повторных вызовов
+        if (this.isModalOpening) {
+            console.log('Модальное окно уже открывается, игнорируем повторный вызов');
+            return;
+        }
+        
         // Проверяем авторизацию
         if (!this.isAuthenticated) {
             NeoDialog.alert('Сохраненные маршруты', 'Для просмотра сохраненных маршрутов необходимо войти в систему');
             return;
         }
         
-        // Проверяем, не открыто ли уже модальное окно
-        if (document.getElementById('saved-routes-modal')) {
-            console.log('Модальное окно уже открыто, закрываем его');
-            document.body.removeChild(document.getElementById('saved-routes-modal'));
-            return;
-        }
+        // Устанавливаем флаг блокировки
+        this.isModalOpening = true;
+        
+        // Удаляем все старые окна сохранённых маршрутов перед созданием нового
+        document.querySelectorAll('#saved-routes-modal').forEach(el => el.remove());
         
         // Получаем ID пользователя
         const userId = this.userProfile.id;
@@ -729,38 +735,21 @@ class PersonalizationModule {
                 // Функция для закрытия модального окна
                 const closeModal = () => {
                     console.log('Закрытие модального окна сохраненных маршрутов');
-                    // Удаляем модальное окно из DOM
-                    if (document.getElementById('saved-routes-modal')) {
-                        document.body.removeChild(document.getElementById('saved-routes-modal'));
-                    }
+                    // Сбрасываем флаг блокировки
+                    this.isModalOpening = false;
+                    // Удаляем все модальные окна сохранённых маршрутов из DOM
+                    document.querySelectorAll('#saved-routes-modal').forEach(el => el.remove());
                 };
-
-                // Обработчик закрытия модального окна через кнопку X
-                const closeButton = document.getElementById('close-routes-modal');
-                if (closeButton) {
-                    console.log('Настраиваю обработчик для кнопки закрытия');
-                    
-                    // Удаляем все существующие обработчики и заменяем кнопку новой
-                    const newCloseButton = document.createElement('button');
-                    newCloseButton.id = 'close-routes-modal';
-                    newCloseButton.className = 'neo-close-button';
-                    newCloseButton.innerHTML = '&times;';
-                    newCloseButton.style.cursor = 'pointer';
-                    newCloseButton.style.fontWeight = 'bold';
-                    newCloseButton.style.fontSize = '24px';
-                    
-                    // Заменяем старую кнопку новой
-                    closeButton.parentNode.replaceChild(newCloseButton, closeButton);
-                    
-                    // Добавляем обработчик для новой кнопки
-                    newCloseButton.addEventListener('click', function(e) {
+                
+                // Обработчик закрытия модального окна через кнопку X (ко всем кнопкам)
+                document.querySelectorAll('#close-routes-modal').forEach(btn => {
+                    btn.onclick = function(e) {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Кнопка закрытия нажата!');
                         closeModal();
-                    });
-                }
-
+                    };
+                });
+                
                 // Закрытие по клику вне модального окна
                 modalContainer.onclick = function(e) {
                     if (e.target === modalContainer) {
@@ -814,7 +803,7 @@ class PersonalizationModule {
                             });
                             
                             if (confirmResult === true) {
-                                this.deleteRoute(userId, routeId, routeItem);
+                            this.deleteRoute(userId, routeId, routeItem);
                             } else {
                                 console.log('Удаление отменено пользователем');
                             }
@@ -1128,9 +1117,9 @@ class PersonalizationModule {
             
             if (!response.ok) {
                 if (response.headers.get('content-type')?.includes('application/json')) {
-                    return response.json().then(data => {
-                        throw new Error(data.error || 'Ошибка при удалении маршрута');
-                    });
+                return response.json().then(data => {
+                    throw new Error(data.error || 'Ошибка при удалении маршрута');
+                });
                 } else {
                     throw new Error(`Ошибка при удалении маршрута: ${response.status} ${response.statusText}`);
                 }
@@ -1152,18 +1141,18 @@ class PersonalizationModule {
                     // Удаляем элемент
                     if (routeItemElement.parentNode) {
                         routeItemElement.parentNode.removeChild(routeItemElement);
-                        
+                    
                         // Проверяем, остались ли еще маршруты
-                        const routesList = document.getElementById('saved-routes-list');
+                    const routesList = document.getElementById('saved-routes-list');
                         const remainingRoutes = routesList?.querySelectorAll('.saved-route-item');
                         
                         if (!remainingRoutes || remainingRoutes.length === 0) {
                             console.log('Больше нет маршрутов, закрываю модальное окно');
-                            
-                            // Закрываем модальное окно
-                            const modal = document.getElementById('saved-routes-modal');
-                            if (modal) {
-                                document.body.removeChild(modal);
+                        
+                        // Закрываем модальное окно
+                        const modal = document.getElementById('saved-routes-modal');
+                        if (modal) {
+                            document.body.removeChild(modal);
                                 NeoDialog.alert('Сохраненные маршруты', 'У вас больше нет сохраненных маршрутов');
                             }
                         }
@@ -1248,8 +1237,8 @@ class PersonalizationModule {
             return new Promise(resolve => {
                 NeoDialog.confirm('Требуется авторизация', 'Для сохранения маршрута необходимо войти в систему. Хотите войти сейчас?', result => {
                     if (result) {
-                        window.location.href = '/login';
-                    }
+                window.location.href = '/login';
+            }
                     resolve(false);
                 });
             });
@@ -1264,12 +1253,12 @@ class PersonalizationModule {
         // Запрашиваем имя маршрута используя NeoDialog.prompt напрямую
         return new Promise(resolve => {
             NeoDialog.prompt('Сохранение маршрута', 'Введите название маршрута:', '', routeName => {
-                if (!routeName || routeName.trim() === '') {
+        if (!routeName || routeName.trim() === '') {
                     NeoDialog.alert('Ошибка', 'Название маршрута не может быть пустым');
                     resolve(false);
-                    return;
-                }
-                
+            return;
+        }
+
                 // Продолжаем сохранение маршрута
                 this._saveRouteWithName(routeData, poisData, routeName);
                 resolve(true);

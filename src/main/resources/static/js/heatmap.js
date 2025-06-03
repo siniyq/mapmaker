@@ -740,7 +740,7 @@ function addHeatmapLegend(metric) {
     const labelsContainer = document.createElement('div');
     labelsContainer.style.cssText = 'display: flex; justify-content: space-between; margin-top: 5px;';
     
-    if (metric === 'rating') {
+        if (metric === 'rating') {
         labelsContainer.innerHTML = `
             <span>1.0</span>
             <span>2.0</span>
@@ -748,7 +748,7 @@ function addHeatmapLegend(metric) {
             <span>4.0</span>
             <span>5.0</span>
         `;
-    } else {
+        } else {
         labelsContainer.innerHTML = `
             <span>1</span>
             <span>2</span>

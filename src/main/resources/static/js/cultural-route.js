@@ -230,7 +230,7 @@ function updateCulturalRouteInfo(points, routePath) {
     
     descriptionHtml += '</ol>';
     routeDescription.innerHTML = descriptionHtml;
-    
+                    
     // Показываем панель культурного маршрута и скрываем тематический маршрут
     if (typeof window.showCulturalRouteInfo === 'function') {
         window.showCulturalRouteInfo();
@@ -590,10 +590,10 @@ function clearMap() {
     if (typeof window.hideAllRouteInfo === 'function') {
         window.hideAllRouteInfo();
     } else {
-        // Скрываем панель информации о маршруте, если она существует
-        const routeInfoPanel = document.getElementById('route-info-panel');
-        if (routeInfoPanel) {
-            routeInfoPanel.style.display = 'none';
+    // Скрываем панель информации о маршруте, если она существует
+    const routeInfoPanel = document.getElementById('route-info-panel');
+    if (routeInfoPanel) {
+        routeInfoPanel.style.display = 'none';
         }
         
         const routeInfo = document.getElementById('route-info');
