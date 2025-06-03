@@ -39,8 +39,6 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<SavedRoute> savedRoutes = new ArrayList<>();
     
-    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<UserPreference> preferences = new HashSet<>();
     
     // Конструкторы
     public User() {
@@ -127,13 +125,6 @@ public class User {
         this.savedRoutes = savedRoutes;
     }
     
-    public Set<UserPreference> getPreferences() {
-        return preferences;
-    }
-    
-    public void setPreferences(Set<UserPreference> preferences) {
-        this.preferences = preferences;
-    }
     
     // Вспомогательные методы
     public void addSavedRoute(SavedRoute route) {
@@ -146,13 +137,4 @@ public class User {
         route.setUser(null);
     }
     
-    public void addPreference(UserPreference preference) {
-        preferences.add(preference);
-        preference.setUser(this);
-    }
-    
-    public void removePreference(UserPreference preference) {
-        preferences.remove(preference);
-        preference.setUser(null);
-    }
 } 
