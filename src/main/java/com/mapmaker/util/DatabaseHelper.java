@@ -127,11 +127,18 @@ public class DatabaseHelper {
 
     public static Connection getConnection() throws SQLException {
         try {
-            return DriverManager.getConnection(
-                "jdbc:postgresql://localhost:5432/mapmaker",
-                "postgres",
-                "1234" // Используем жестко заданный пароль из конфигурационного файла
-            );
+            // Получаем параметры подключения из переменных окружения или используем значения по умолчанию
+            String dbHost = System.getenv("DB_HOST") != null ? System.getenv("DB_HOST") : "localhost";
+            String dbPort = System.getenv("DB_PORT") != null ? System.getenv("DB_PORT") : "5432";
+            String dbName = System.getenv("DB_NAME") != null ? System.getenv("DB_NAME") : "mapmaker";
+            String dbUser = System.getenv("DB_USER") != null ? System.getenv("DB_USER") : "postgres";
+            String dbPassword = System.getenv("DB_PASSWORD") != null ? System.getenv("DB_PASSWORD") : "1234";
+            
+            String url = String.format("jdbc:postgresql://%s:%s/%s", dbHost, dbPort, dbName);
+            
+            System.out.println("Подключение к БД: " + url + " с пользователем: " + dbUser);
+            
+            return DriverManager.getConnection(url, dbUser, dbPassword);
         } catch (SQLException e) {
             throw new SQLException("Ошибка подключения к базе данных: " + e.getMessage(), e);
         }

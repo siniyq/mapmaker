@@ -31,6 +31,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.io.FileNotFoundException;
+import org.springframework.core.io.ClassPathResource;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 @RestController
 @RequestMapping("/api")
@@ -250,61 +253,9 @@ public class ApiController {
                 System.out.println("Средний рейтинг (первые 10 точек): " + (totalRating / Math.min(pois.size(), 10)));
             }
             
-            // Загружаем границы города
-            // Исправляем путь для обеспечения независимости от текущей директории
-            Path path = Paths.get(System.getProperty("user.dir"), "src", "main", "java", "com", "mapmaker", "data", "vitebsk.geojson");
-            if (!Files.exists(path)) {
-                System.err.println("Файл границ города не найден по пути: " + path);
-                throw new FileNotFoundException("Файл границ города не найден: " + path);
-            }
-            System.out.println("Файл границ города найден: " + path);
-            String geojsonStr = Files.readString(path);
-            JSONObject geojson = new JSONObject(geojsonStr);
-            
-            // Получаем координаты границы города (первый полигон)
-            JSONArray coordinates = geojson.getJSONArray("features")
-                .getJSONObject(0)
-                .getJSONObject("geometry")
-                .getJSONArray("coordinates")
-                .getJSONArray(0)
-                .getJSONArray(0);
-
-            // Находим границы города для оптимизации
-            double minLat = Double.MAX_VALUE;
-            double maxLat = Double.MIN_VALUE;
-            double minLng = Double.MAX_VALUE;
-            double maxLng = Double.MIN_VALUE;
-            
-            // Создаем простую реализацию проверки точки внутри полигона
-            List<Map<String, Double>> cityPolygon = new ArrayList<>();
-                
-            for (int i = 0; i < coordinates.length(); i++) {
-                JSONArray point = coordinates.getJSONArray(i);
-                double lng = point.getDouble(0);
-                double lat = point.getDouble(1);
-                
-                Map<String, Double> coordMap = new HashMap<>();
-                coordMap.put("lat", lat);
-                coordMap.put("lng", lng);
-                cityPolygon.add(coordMap);
-                
-                minLat = Math.min(minLat, lat);
-                maxLat = Math.max(maxLat, lat);
-                minLng = Math.min(minLng, lng);
-                maxLng = Math.max(maxLng, lng);
-            }
-            
-            // Фильтруем точки: оставляем только те, что внутри границ города
-            List<PointOfInterest> filteredPois = new ArrayList<>();
-            for (PointOfInterest poi : pois) {
-                if (isInBounds(poi.getLatitude(), poi.getLongitude(), minLat, maxLat, minLng, maxLng)) {
-                    // Добавляем точку, если она находится внутри прямоугольника границ
-                    // Для большей точности можно было бы проверять вхождение в полигон города
-                    filteredPois.add(poi);
-                }
-            }
-            
-            System.out.println("Отфильтровано POI в границах города: " + filteredPois.size());
+            // Используем все точки без фильтрации по границам города
+            List<PointOfInterest> filteredPois = pois;
+            System.out.println("Используется POI: " + filteredPois.size());
             
             // Преобразуем в формат для тепловой карты
             Map<String, Object> result = new HashMap<>();
@@ -473,19 +424,6 @@ public class ApiController {
             e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(null);
         }
-    }
-
-    @GetMapping("/vitebsk-geojson")
-    public ResponseEntity<String> getVitebskGeoJson() throws IOException {
-        // Исправляем путь для обеспечения независимости от текущей директории
-        Path path = Paths.get(System.getProperty("user.dir"), "src", "main", "java", "com", "mapmaker", "data", "vitebsk.geojson");
-        if (!Files.exists(path)) {
-            System.err.println("Файл границ города не найден по пути: " + path);
-            throw new FileNotFoundException("Файл границ города не найден: " + path);
-        }
-        System.out.println("Файл границ города найден: " + path);
-        String geojson = Files.readString(path);
-        return ResponseEntity.ok().body(geojson);
     }
 
     /*

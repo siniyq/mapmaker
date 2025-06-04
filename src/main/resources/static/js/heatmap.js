@@ -51,45 +51,47 @@ script.onerror = function() {
 
 // Функция создания тепловой карты
 function createHeatmap(metric) {
-    clearMap(); // Очищаем текущую карту
+    console.log('Создание тепловой карты с метрикой:', metric);
+    
+    // Очищаем карту от предыдущих данных
     clearHeatmap();
     
-    // Удаляем все маркеры при отображении тепловой карты плотности
-    if (metric === 'density' && markersLayer) {
-        markersLayer.clearLayers();
+    // Создаем индикатор загрузки
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'heatmap-loading';
+    loadingDiv.innerHTML = '<div style="text-align:center; padding:20px; background:white; border-radius:5px; box-shadow:0 2px 10px rgba(0,0,0,0.1);"><i class="fas fa-spinner fa-spin"></i> Загрузка данных...</div>';
+    loadingDiv.style.position = 'absolute';
+    loadingDiv.style.top = '50%';
+    loadingDiv.style.left = '50%';
+    loadingDiv.style.transform = 'translate(-50%, -50%)';
+    loadingDiv.style.zIndex = '10000';
+    document.body.appendChild(loadingDiv);
+
+    // Удаляем индикатор загрузки через 5 секунд (защита от зависания)
+    setTimeout(() => {
+        const loading = document.getElementById('heatmap-loading');
+        if (loading) {
+            loading.remove();
     }
+    }, 5000);
     
     // Получаем тип заведений
     const heatmapType = document.getElementById('heatmap-type').value;
     
-    // Сначала загружаем границы города, затем строим тепловую карту
-    fetch('/api/vitebsk-geojson')
-        .then(response => response.json())
-        .then(geojson => {
-            // Получаем координаты первого полигона
-            const coordinates = geojson.features[0].geometry.coordinates;
-            // Для MultiPolygon берём первый полигон
-            const vitebskPolygonCoords = coordinates[0][0].map(([lng, lat]) => ({lat, lng}));
-            
-            // Теперь запрашиваем данные для тепловой карты
-            return fetch(`/api/heatmap-data?type=${heatmapType}&metric=${metric}`)
+    // Запрашиваем данные для тепловой карты напрямую (без границ города)
+    fetch(`/api/heatmap-data?type=${heatmapType}&metric=${metric}`)
                 .then(response => {
                     if (!response.ok) {
                         throw new Error(`HTTP error! status: ${response.status}`);
                     }
-                    return response.json().then(data => ({
-                        data: data,
-                        cityBoundary: vitebskPolygonCoords,
-                        geojson: geojson,
-                        metric: metric // Передаем метрику дальше
-                    }));
-                });
+            return response.json();
         })
-        .then(result => {
-            const data = result.data;
-            const vitebskPolygonCoords = result.cityBoundary;
-            const geojson = result.geojson;
-            const metric = result.metric; // Получаем метрику
+        .then(data => {
+            // Удаляем индикатор загрузки
+            const loading = document.getElementById('heatmap-loading');
+            if (loading) {
+                loading.remove();
+            }
             
             if (!data || !data.points || data.points.length === 0) {
                 console.log('Получены данные:', data);
@@ -105,17 +107,17 @@ function createHeatmap(metric) {
                 addPointMarkers(points, heatmapType, metric);
             }
             
-            // Находим границы полигона
+            // Находим границы области данных
             let minLat = Number.MAX_VALUE;
             let maxLat = Number.MIN_VALUE;
             let minLng = Number.MAX_VALUE;
             let maxLng = Number.MIN_VALUE;
             
-            vitebskPolygonCoords.forEach(coord => {
-                minLat = Math.min(minLat, coord.lat);
-                maxLat = Math.max(maxLat, coord.lat);
-                minLng = Math.min(minLng, coord.lng);
-                maxLng = Math.max(maxLng, coord.lng);
+            points.forEach(point => {
+                minLat = Math.min(minLat, point.lat);
+                maxLat = Math.max(maxLat, point.lat);
+                minLng = Math.min(minLng, point.lng);
+                maxLng = Math.max(maxLng, point.lng);
             });
             
             // Добавим небольшой отступ для полного охвата
@@ -125,45 +127,22 @@ function createHeatmap(metric) {
             minLng -= padding;
             maxLng += padding;
             
-            console.log(`Границы региона: [${minLat}, ${minLng}] - [${maxLat}, ${maxLng}]`);
+            console.log(`Границы области данных: [${minLat}, ${minLng}] - [${maxLat}, ${maxLng}]`);
             
             // Размеры канваса
             const canvasWidth = 2000;
             const canvasHeight = 2000;
             
-            // 1. Создаем основной canvas
+            // Создаем основной canvas
             const canvas = document.createElement('canvas');
             canvas.width = canvasWidth;
             canvas.height = canvasHeight;
             const ctx = canvas.getContext('2d');
             
-            // 2. Создаем canvas для маски полигона
-            const maskCanvas = document.createElement('canvas');
-            maskCanvas.width = canvasWidth;
-            maskCanvas.height = canvasHeight;
-            const maskCtx = maskCanvas.getContext('2d');
-            
-            // 3. Преобразуем координаты полигона в пиксели
-            const vitebskPolygon = vitebskPolygonCoords.map(coord => {
-                const x = Math.round(((coord.lng - minLng) / (maxLng - minLng)) * canvasWidth);
-                const y = Math.round(((maxLat - coord.lat) / (maxLat - minLat)) * canvasHeight);
-                return {x, y};
-            });
-            
-            // 4. Рисуем полигон города на маске
-            maskCtx.fillStyle = 'white';
-            maskCtx.beginPath();
-            vitebskPolygon.forEach((point, i) => {
-                if (i === 0) maskCtx.moveTo(point.x, point.y);
-                else maskCtx.lineTo(point.x, point.y);
-            });
-            maskCtx.closePath();
-            maskCtx.fill();
-            
-            // 5. Если отображаем плотность, создаем карту плотности
+            // Если отображаем плотность, создаем карту плотности
             if (metric === 'density') {
                 // Создаем сетку плотности на основе разделения на ячейки
-                const cellSize = 0.0065; // Уменьшаем размер ячейки для более плотного покрытия (~120м)
+                const cellSize = 0.0065; // Размер ячейки (~120м)
                 const densityGrid = {};
                 
                 // Заполняем сетку плотности
@@ -197,8 +176,6 @@ function createHeatmap(metric) {
                         const centerLat = cell.lat / cell.count;
                         const centerLng = cell.lng / cell.count;
                         
-                        // Проверяем, находится ли центр ячейки внутри полигона города
-                        if (isPointInPolygon({lat: centerLat, lng: centerLng}, vitebskPolygonCoords)) {
                             // Вычисляем плотность как количество точек в ячейке
                             const density = cell.count;
                             maxDensity = Math.max(maxDensity, density);
@@ -218,7 +195,6 @@ function createHeatmap(metric) {
                             cell.points.forEach(p => {
                                 p.count = density;
                             });
-                        }
                     }
                 }
                 
@@ -239,24 +215,19 @@ function createHeatmap(metric) {
                 
                 // Определяем функцию для получения цвета в зависимости от плотности
                 const getDensityColor = (value) => {
-                    // Используем порог в 10 вместо 6 для более яркого отображения областей с высокой плотностью
                     const maxDisplayValue = Math.max(10, maxDensity); 
                     
-                    // Для низких значений используем линейную шкалу, для высоких - логарифмическую
-                    // Это сделает различия между областями более заметными
                     let normalizedValue;
                     
                     if (value <= 5) {
-                        // Для значений до 5 используем линейную шкалу
-                        normalizedValue = value / 5 * 0.8; // максимальное значение 0.8 (для value=5)
+                        normalizedValue = value / 5 * 0.8;
                     } else {
-                        // Для значений выше 5 используем логарифмическую шкалу
                         normalizedValue = 0.8 + Math.log(value - 4) / Math.log(maxDisplayValue - 4) * 0.2;
                     }
                     
-                    normalizedValue = Math.min(1.0, normalizedValue); // ограничиваем максимальным значением 1.0
+                    normalizedValue = Math.min(1.0, normalizedValue);
                     
-                    // Используем 5 равных диапазонов для плотности
+                    // Цветовая схема для плотности
                     if (normalizedValue <= 0.2) {
                         // Синий (1 точка)
                         return 'rgba(70, 130, 190, 0.95)';
@@ -288,7 +259,7 @@ function createHeatmap(metric) {
                 densityCells.forEach(cell => {
                     // Адаптивный радиус: с небольшим увеличением в зависимости от количества точек
                     // Это создаст более естественное распределение тепловой карты
-                    const baseRadius = 50; // Увеличиваем базовый радиус
+                    const baseRadius = 70; // Увеличиваем базовый радиус с 50 до 70
                     const scaling = Math.min(2.0, Math.sqrt(cell.count) / 1.5); // Более значительное масштабирование
                     const pointRadius = baseRadius * scaling;
                     
@@ -301,8 +272,8 @@ function createHeatmap(metric) {
                     // Центр градиента - цвет в зависимости от плотности
                     gradient.addColorStop(0, getDensityColor(cell.value));
                     // Промежуточная точка - более плавный переход к прозрачности
-                    gradient.addColorStop(0.7, getDensityColor(cell.value).replace('0.95', '0.8'));
-                    gradient.addColorStop(0.9, getDensityColor(cell.value).replace('0.95', '0.3'));
+                    gradient.addColorStop(0.7, getDensityColor(cell.value).replace('0.95', '0.7'));
+                    gradient.addColorStop(0.9, getDensityColor(cell.value).replace('0.95', '0.25'));
                     // Края градиента - прозрачные
                     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                     
@@ -315,7 +286,7 @@ function createHeatmap(metric) {
                     // Добавляем яркий центр для выделения центров высокой плотности
                     const centerSize = pointRadius * 0.25; // Увеличиваем размер центра
                     heatCtx.beginPath();
-                    heatCtx.fillStyle = getDensityColor(cell.value).replace('0.95', '1.0');
+                    heatCtx.fillStyle = getDensityColor(cell.value).replace('0.95', '0.9');
                     heatCtx.arc(cell.x, cell.y, centerSize, 0, Math.PI * 2);
                     heatCtx.fill();
                 });
@@ -324,76 +295,52 @@ function createHeatmap(metric) {
                 ctx.drawImage(heatCanvas, 0, 0);
                 
             } else {
-                // 5. Создаем сетку точек внутри полигона для карты рейтинга
-                const gridSize = 0.0012; // Увеличиваем шаг сетки с 0.0008 до 0.0012
+                // Создаем упрощенную сетку точек для карты рейтинга
+                const gridSize = 0.003; // Увеличиваем размер сетки для более крупных областей
                 const gridPoints = [];
                 
-                // Анализируем распределение точек для определения адаптивного радиуса
-                const analyzeNearbyPoints = (lat, lng) => {
-                    let count = 0;
-                    let nearestDistance = Number.MAX_VALUE;
+                // Создаем сетку и группируем точки по ячейкам (аналогично карте плотности)
+                const ratingGrid = {};
                     
                     for (const p of points) {
-                        const d = Math.sqrt(Math.pow(lat - p.lat, 2) + Math.pow(lng - p.lng, 2));
-                        if (d < 0.01) { // ~1км
-                            count++;
-                            nearestDistance = Math.min(nearestDistance, d);
-                        }
+                    const cellX = Math.floor(p.lat / gridSize);
+                    const cellY = Math.floor(p.lng / gridSize);
+                    const cellKey = `${cellX},${cellY}`;
+                    
+                    if (!ratingGrid[cellKey]) {
+                        ratingGrid[cellKey] = {
+                            ratings: [],
+                            lat: 0,
+                            lng: 0,
+                            count: 0
+                        };
                     }
                     
-                    return { count, nearestDistance };
-                };
+                    ratingGrid[cellKey].ratings.push(p.value);
+                    ratingGrid[cellKey].lat += p.lat;
+                    ratingGrid[cellKey].lng += p.lng;
+                    ratingGrid[cellKey].count++;
+                }
                 
-                for (let lat = minLat; lat <= maxLat; lat += gridSize) {
-                    for (let lng = minLng; lng <= maxLng; lng += gridSize) {
-                        // Проверяем, находится ли точка внутри полигона
-                        if (isPointInPolygon({lat, lng}, vitebskPolygonCoords)) {
-                            // Анализируем близлежащие точки
-                            const pointAnalysis = analyzeNearbyPoints(lat, lng);
-                            
-                            // Пропускаем точки, которые слишком далеко от существующих
-                            if (pointAnalysis.nearestDistance > 0.008) { // ~800м
-                                continue;
-                            }
-                            
-                            // Вычисляем значение с помощью метода IDW (Inverse Distance Weighting)
-                            let numerator = 0, denominator = 0;
-                            let hasNearbyPoints = false;
-                            
-                            // Определяем эффективный радиус в зависимости от плотности точек
-                            // Если точек много, уменьшаем радиус влияния
-                            const effectiveRadius = pointAnalysis.count > 3 ? 0.003 : 0.004;
-                            
-                            for (const p of points) {
-                                const d = Math.sqrt(Math.pow(lat - p.lat, 2) + Math.pow(lng - p.lng, 2));
-                                
-                                if (d < effectiveRadius) {
-                                    hasNearbyPoints = true;
-                                    
-                                    if (d < 0.0001) { // ~10м
-                                        numerator = p.value;
-                                        denominator = 1;
-                                        break;
-                                    }
-                                    
-                                    // Вес обратно пропорционален квадрату расстояния
-                                    // Увеличиваем степень для более быстрого убывания влияния с расстоянием
-                                    const w = 1 / Math.pow(d + 0.0001, 2.5);
-                                    numerator += p.value * w;
-                                    denominator += w;
-                                }
-                            }
-                            
-                            if (hasNearbyPoints && denominator > 0) {
-                                const value = numerator / denominator;
+                // Преобразуем сетку в точки для тепловой карты
+                for (const key in ratingGrid) {
+                    const cell = ratingGrid[key];
+                    if (cell.count > 0) {
+                        const centerLat = cell.lat / cell.count;
+                        const centerLng = cell.lng / cell.count;
+                        
+                        // Вычисляем средний рейтинг для ячейки
+                        const avgRating = cell.ratings.reduce((sum, r) => sum + r, 0) / cell.ratings.length;
+                        
                                 // Преобразуем в пиксельные координаты
-                                const x = Math.round(((lng - minLng) / (maxLng - minLng)) * canvasWidth);
-                                const y = Math.round(((maxLat - lat) / (maxLat - minLat)) * canvasHeight);
+                        const x = Math.round(((centerLng - minLng) / (maxLng - minLng)) * canvasWidth);
+                        const y = Math.round(((maxLat - centerLat) / (maxLat - minLat)) * canvasHeight);
                                 
-                                // Сохраняем данные о плотности точек
-                                gridPoints.push({x, y, value, pointDensity: pointAnalysis.count});
-                            }
-                        }
+                        gridPoints.push({
+                            x, y, 
+                            value: avgRating,
+                            count: cell.count
+                        });
                     }
                 }
                 
@@ -404,46 +351,44 @@ function createHeatmap(metric) {
                     return;
                 }
                 
-                // 6. Определяем функцию для получения цвета в зависимости от значения рейтинга
+                // Определяем функцию для получения цвета в зависимости от значения рейтинга
                 const getRatingColor = (value) => {
                     // Нормализуем от 0 до 1
                     const normalizedValue = Math.min(Math.max(value / 5, 0), 1);
                     
                     if (normalizedValue < 0.4) {
-                        // От ярко-красного до оранжевого
+                        // От ярко-красного до оранжевого (плохой рейтинг)
                         const r = 255;
                         const g = Math.round(100 + 155 * (normalizedValue / 0.4));
-                        return `rgba(${r}, ${g}, 0, 0.65)`;
+                        return `rgba(${r}, ${g}, 0, 0.95)`;
                     } else if (normalizedValue < 0.7) {
-                        // От оранжевого до желтого
+                        // От оранжевого до желтого (средний рейтинг)
                         const r = 255;
                         const g = Math.round(200 + 55 * (normalizedValue - 0.4) / 0.3);
-                        return `rgba(${r}, ${g}, 0, 0.65)`;
+                        return `rgba(${r}, ${g}, 0, 0.95)`;
                     } else {
-                        // От желтого до ярко-зеленого
+                        // От желтого до ярко-зеленого (хороший рейтинг)
                         const r = Math.round(255 * (1 - (normalizedValue - 0.7) / 0.3));
                         const g = 255;
-                        return `rgba(${r}, ${g}, 0, 0.65)`;
+                        return `rgba(${r}, ${g}, 0, 0.95)`;
                     }
                 };
                 
-                // 7. Рисуем градиенты для каждой точки на отдельном канвасе
+                // Рисуем градиенты для каждой точки рейтинга
                 const heatCanvas = document.createElement('canvas');
                 heatCanvas.width = canvasWidth;
                 heatCanvas.height = canvasHeight;
                 const heatCtx = heatCanvas.getContext('2d');
                 
-                // Устанавливаем параметры размытия для более четких контуров
-                heatCtx.filter = `blur(15px)`;
+                // Используем такое же размытие как у карты плотности
+                heatCtx.filter = `blur(12px)`;
                 
                 // Рисуем каждую точку как градиент
                 gridPoints.forEach(point => {
-                    // Радиус влияния точки зависит от плотности точек в этой области
-                    // Если точек много, уменьшаем радиус, если мало - делаем радиус меньше
-                    const baseRadius = 15; // Значительно уменьшаем базовый радиус
-                    const pointRadius = point.pointDensity > 3 ? 
-                        baseRadius * 0.9 : 
-                        (point.pointDensity === 1 ? baseRadius * 0.7 : baseRadius);
+                    // Используем большой радиус как у карты плотности
+                    const baseRadius = 75; // Увеличиваем с 60 до 75 для лучшей видимости
+                    const scaling = Math.min(2.0, Math.sqrt(point.count) / 1.5);
+                    const pointRadius = baseRadius * scaling;
                     
                     // Создаем радиальный градиент
                     const gradient = heatCtx.createRadialGradient(
@@ -451,10 +396,11 @@ function createHeatmap(metric) {
                         point.x, point.y, pointRadius
                     );
                     
-                    // Центр градиента - цвет в зависимости от значения
+                    // Центр градиента - цвет в зависимости от рейтинга
                     gradient.addColorStop(0, getRatingColor(point.value));
                     // Промежуточная точка для более плавного затухания
-                    gradient.addColorStop(0.85, getRatingColor(point.value).replace('0.65', '0.3'));
+                    gradient.addColorStop(0.7, getRatingColor(point.value).replace('0.95', '0.7'));
+                    gradient.addColorStop(0.9, getRatingColor(point.value).replace('0.95', '0.25'));
                     // Края градиента - прозрачные
                     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
                     
@@ -464,25 +410,19 @@ function createHeatmap(metric) {
                     heatCtx.arc(point.x, point.y, pointRadius, 0, Math.PI * 2);
                     heatCtx.fill();
                     
-                    // Добавляем яркий центр для увеличения контраста
+                    // Добавляем яркий центр для выделения
+                    const centerSize = pointRadius * 0.25;
                     heatCtx.beginPath();
-                    heatCtx.fillStyle = getRatingColor(point.value).replace('0.65', '0.8');
-                    heatCtx.arc(point.x, point.y, pointRadius * 0.15, 0, Math.PI * 2);
+                    heatCtx.fillStyle = getRatingColor(point.value).replace('0.95', '0.8');
+                    heatCtx.arc(point.x, point.y, centerSize, 0, Math.PI * 2);
                     heatCtx.fill();
                 });
                 
-                // Накладываем маску на тепловую карту
+                // Накладываем тепловую карту на основной canvas
                 ctx.drawImage(heatCanvas, 0, 0);
             }
             
-            // Применяем маску полигона - оставляем только то, что внутри
-            ctx.globalCompositeOperation = 'destination-in';
-            ctx.drawImage(maskCanvas, 0, 0);
-            
-            // Возвращаем нормальный режим композиции
-            ctx.globalCompositeOperation = 'source-over';
-            
-            // 9. Добавляем созданную тепловую карту на Leaflet
+            // Добавляем созданную тепловую карту на Leaflet
             const bounds = L.latLngBounds(
                 L.latLng(minLat, minLng), 
                 L.latLng(maxLat, maxLng)
@@ -493,25 +433,22 @@ function createHeatmap(metric) {
                 interactive: false
             }).addTo(map);
             
-            // 10. Добавляем контур границ города
-            L.geoJSON(geojson, {
-                style: {
-                    color: '#333',
-                    weight: 1.5,
-                    fillOpacity: 0,
-                    opacity: 0.6
-                }
-            }).addTo(map);
-            
-            // 11. Добавляем легенду
+            // Добавляем легенду
             addHeatmapLegend(metric);
             
-            // 12. Центрируем карту на границах города
-            const latLngs = vitebskPolygonCoords.map(coord => [coord.lat, coord.lng]);
-            const cityBounds = L.latLngBounds(latLngs);
-            map.fitBounds(cityBounds, {padding: [20, 20]});
+            // Центрируем карту на области данных
+            const dataBounds = L.latLngBounds(
+                L.latLng(minLat, minLng),
+                L.latLng(maxLat, maxLng)
+            );
+            map.fitBounds(dataBounds, {padding: [20, 20]});
         })
         .catch(error => {
+            // Удаляем индикатор загрузки в случае ошибки
+            const loading = document.getElementById('heatmap-loading');
+            if (loading) {
+                loading.remove();
+            }
             console.error('Ошибка при получении данных для тепловой карты:', error.message, error);
             alert(`Ошибка при построении тепловой карты: ${error.message}`);
         });

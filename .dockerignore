@@ -1,0 +1,33 @@
+# Git
+.git/
+.gitignore
+
+# Maven
+target/
+.mvn/
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Logs
+*.log
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local config files
+application-local.properties
+config-local.properties
+
+# Temporary files
+*.tmp
+*.bak 

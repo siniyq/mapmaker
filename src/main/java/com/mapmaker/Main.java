@@ -38,7 +38,7 @@ public class Main {
             System.out.println("updateCultural: " + updateCultural);
             
             // Проверяем и собираем стандартные данные если нужно
-            if (DatabaseHelper.isDataEmpty() || forceUpdate) {
+            if (forceUpdate) {
                 System.out.println("Начинаем сбор данных о стандартных местах (рестораны, кафе, бары и т.д.)...");
                     
                 // Создаем сервис напрямую
@@ -47,27 +47,25 @@ public class Main {
                 
                 System.out.println("Сбор данных о стандартных местах завершен");
             } else {
-                System.out.println("Сбор данных о стандартных местах не требуется");
+                System.out.println("Сбор данных о стандартных местах пропущен. Используйте параметр 'forceUpdate' для принудительного обновления.");
             }
             
             // Проверяем и собираем данные о культурных местах если нужно
-            if (DatabaseHelper.isCulturalDataEmpty() || updateCultural) {
+            if (updateCultural) {
                 System.out.println("Начинаем сбор данных о культурных местах (музеи, парки, театры и т.д.)...");
                 
                 // Создаем сервис для культурных мест напрямую
                 CulturalPlacesService culturalService = new CulturalPlacesService(null);
                 
                 // Если указан параметр updateCultural, предварительно очищаем данные о культурных местах
-                if (updateCultural) {
-                    System.out.println("Очистка существующих данных о культурных местах...");
-                    culturalService.clearCulturalPlaces();
-                }
+                System.out.println("Очистка существующих данных о культурных местах...");
+                culturalService.clearCulturalPlaces();
                 
                 culturalService.fetchCulturalPlaces();
                 
                 System.out.println("Сбор данных о культурных местах завершен");
             } else {
-                System.out.println("Сбор данных о культурных местах не требуется");
+                System.out.println("Сбор данных о культурных местах пропущен. Используйте параметр 'updateCultural' для обновления.");
             }
             
             // Если это прямой запуск из командной строки с аргументом updateCultural или forceUpdate,
