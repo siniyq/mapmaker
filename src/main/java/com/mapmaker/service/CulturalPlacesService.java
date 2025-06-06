@@ -96,8 +96,7 @@ public class CulturalPlacesService {
                 "vit_museum_1",
                 55.1922,
                 30.2049,
-                "ул. Ленина, 36",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Viciebsk_-_Museum.jpg/800px-Viciebsk_-_Museum.jpg"
+                "ул. Ленина, 36"
             );
             
             addTestPlace(
@@ -107,8 +106,7 @@ public class CulturalPlacesService {
                 "vit_museum_2",
                 55.1934,
                 30.2080,
-                "ул. Покровская, 11",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/f/ff/Chagall_house_in_Vitebsk.jpg/800px-Chagall_house_in_Vitebsk.jpg"
+                "ул. Покровская, 11"
             );
             
             // Парки
@@ -119,8 +117,7 @@ public class CulturalPlacesService {
                 "vit_park_1",
                 55.1768,
                 30.2210,
-                "пр-т Фрунзе",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Victory_Park%2C_Vitebsk.jpg/800px-Victory_Park%2C_Vitebsk.jpg"
+                "пр-т Фрунзе"
             );
             
             addTestPlace(
@@ -130,8 +127,7 @@ public class CulturalPlacesService {
                 "vit_park_2",
                 55.1860,
                 30.2120,
-                "ул. Замковая",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Soviet_Army_Park_in_Vitebsk.jpg/800px-Soviet_Army_Park_in_Vitebsk.jpg"
+                "ул. Замковая"
             );
             
             // Театры
@@ -142,8 +138,7 @@ public class CulturalPlacesService {
                 "vit_theater_1",
                 55.1920,
                 30.2020,
-                "ул. Замковая, 2",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5f/Yakub_Kolas_Theatre_in_Vitebsk.jpg/800px-Yakub_Kolas_Theatre_in_Vitebsk.jpg"
+                "ул. Замковая, 2"
             );
             
             // Церкви
@@ -154,8 +149,7 @@ public class CulturalPlacesService {
                 "vit_church_1",
                 55.1940,
                 30.2035,
-                "ул. Ленина, 11",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4e/Uspenski_Cathedral_in_Vitebsk.jpg/800px-Uspenski_Cathedral_in_Vitebsk.jpg"
+                "ул. Ленина, 11"
             );
             
             addTestPlace(
@@ -165,8 +159,7 @@ public class CulturalPlacesService {
                 "vit_church_2",
                 55.1915,
                 30.2080,
-                "ул. Замковая, 1",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d9/Blagoveschenskaya_Church_in_Vitebsk.jpg/800px-Blagoveschenskaya_Church_in_Vitebsk.jpg"
+                "ул. Замковая, 1"
             );
             
             // Достопримечательности
@@ -177,8 +170,7 @@ public class CulturalPlacesService {
                 "vit_attr_1",
                 55.1922,
                 30.2033,
-                "Ратушная площадь",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a1/Viciebsk_-_Ratusha.jpg/800px-Viciebsk_-_Ratusha.jpg"
+                "Ратушная площадь"
             );
             
             addTestPlace(
@@ -188,8 +180,7 @@ public class CulturalPlacesService {
                 "vit_attr_2",
                 55.1903,
                 30.2069,
-                "пл. Тысячелетия",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b7/Alexander_Nevsky_Monument_in_Vitebsk.jpg/800px-Alexander_Nevsky_Monument_in_Vitebsk.jpg"
+                "пл. Тысячелетия"
             );
             
             // Галереи
@@ -200,8 +191,7 @@ public class CulturalPlacesService {
                 "vit_gallery_1",
                 55.1925,
                 30.2045,
-                "ул. Ленина, 32",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8a/Art_Museum_in_Vitebsk.jpg/800px-Art_Museum_in_Vitebsk.jpg"
+                "ул. Ленина, 32"
             );
             
             // Библиотеки
@@ -212,8 +202,7 @@ public class CulturalPlacesService {
                 "vit_library_1",
                 55.1932,
                 30.2055,
-                "ул. Ленина, 8а",
-                "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Vitebsk_Regional_Library.jpg/800px-Vitebsk_Regional_Library.jpg"
+                "ул. Ленина, 8а"
             );
             
             System.out.println("Тестовые данные успешно созданы");
@@ -228,12 +217,12 @@ public class CulturalPlacesService {
      * Добавляет тестовое место в базу данных
      */
     private void addTestPlace(String name, String type, float rating, String placeId, 
-                              double latitude, double longitude, String vicinity, String photoUrl) {
+                              double latitude, double longitude, String vicinity) {
         String sql = """
             INSERT INTO cultural_places 
-                (name, type, rating, place_id, latitude, longitude, vicinity, photo_url, location)
+                (name, type, rating, place_id, latitude, longitude, vicinity, location)
             VALUES 
-                (?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))
+                (?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))
             ON CONFLICT (place_id) DO NOTHING
         """;
         
@@ -247,11 +236,10 @@ public class CulturalPlacesService {
             stmt.setDouble(5, latitude);
             stmt.setDouble(6, longitude);
             stmt.setString(7, vicinity);
-            stmt.setString(8, photoUrl);
             
             // Устанавливаем координаты для геометрии
-            stmt.setDouble(9, longitude);
-            stmt.setDouble(10, latitude);
+            stmt.setDouble(8, longitude);
+            stmt.setDouble(9, latitude);
             
             int affected = stmt.executeUpdate();
             if (affected > 0) {
@@ -322,9 +310,9 @@ public class CulturalPlacesService {
     private void savePlaceToDatabase(PlacesSearchResult place, String type) {
         String sql = """
             INSERT INTO cultural_places 
-                (name, type, rating, place_id, latitude, longitude, vicinity, photo_url, location)
+                (name, type, rating, place_id, latitude, longitude, vicinity, location)
             VALUES 
-                (?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))
+                (?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))
             ON CONFLICT (place_id) DO NOTHING
         """;
         
@@ -339,18 +327,9 @@ public class CulturalPlacesService {
             stmt.setDouble(6, place.geometry.location.lng);
             stmt.setString(7, place.vicinity);
             
-            // Получаем URL фотографии
-            String photoUrl = null;
-            if (place.photos != null && place.photos.length > 0) {
-                photoUrl = String.format(
-                    "https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference=%s&key=%s",
-                    place.photos[0].photoReference, API_KEY);
-            }
-            stmt.setString(8, photoUrl);
-            
             // Устанавливаем координаты для геометрии
-            stmt.setDouble(9, place.geometry.location.lng);
-            stmt.setDouble(10, place.geometry.location.lat);
+            stmt.setDouble(8, place.geometry.location.lng);
+            stmt.setDouble(9, place.geometry.location.lat);
             
             int affected = stmt.executeUpdate();
             if (affected > 0) {

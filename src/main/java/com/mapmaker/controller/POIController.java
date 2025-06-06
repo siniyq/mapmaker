@@ -30,24 +30,19 @@ public class POIController {
         try (Connection conn = DatabaseHelper.getConnection()) {
             
             StringBuilder queryBuilder = new StringBuilder(
-                "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address, photo_url FROM points_of_interest WHERE ");
+                "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address FROM points_of_interest WHERE ");
             
-            // Строим условие IN для типов
-            queryBuilder.append("type IN (");
-            for (int i = 0; i < typeArray.length; i++) {
-                if (i > 0) {
-                    queryBuilder.append(", ");
+            if (types != null && types.length() > 0) {
+                queryBuilder.append("type IN (");
+                for (int i = 0; i < typeArray.length; i++) {
+                    if (i > 0) {
+                        queryBuilder.append(", ");
+                    }
+                    queryBuilder.append("?");
                 }
-                queryBuilder.append("?");
-            }
-            queryBuilder.append(")");
-            
-            if (typeArray.length > 0) {
-                // Добавляем сортировку по рейтингу
-                queryBuilder.append(" ORDER BY rating DESC");
+                queryBuilder.append(")");
                 
                 try (PreparedStatement pstmt = conn.prepareStatement(queryBuilder.toString())) {
-                    // Устанавливаем значения для IN
                     for (int i = 0; i < typeArray.length; i++) {
                         pstmt.setString(i + 1, typeArray[i].trim());
                     }
@@ -64,20 +59,6 @@ public class POIController {
                             poi.put("longitude", rs.getDouble("longitude"));
                             poi.put("vicinity", rs.getString("vicinity"));
                             poi.put("address", rs.getString("address"));
-                            
-                            // Обрабатываем photo_url (который хранится как JSON массив)
-                            String photoUrlJson = rs.getString("photo_url");
-                            if (photoUrlJson != null) {
-                                try {
-                                    JSONArray photos = new JSONArray(photoUrlJson);
-                                    if (photos.length() > 0) {
-                                        poi.put("photoUrl", photos.getString(0)); // Берем первое фото
-                                        poi.put("photos", photos.toList()); // Все фото
-                                    }
-                                } catch (Exception e) {
-                                    System.err.println("Ошибка при разборе JSON с фото: " + e.getMessage());
-                                }
-                            }
                             
                             results.add(poi);
                         }
@@ -100,7 +81,7 @@ public class POIController {
         try (Connection conn = DatabaseHelper.getConnection()) {
             
             StringBuilder queryBuilder = new StringBuilder(
-                "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address, photo_url FROM cultural_places");
+                "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address FROM cultural_places");
             
             // Если указаны конкретные типы, добавляем фильтрацию
             if (types != null && !types.trim().isEmpty()) {
@@ -136,20 +117,6 @@ public class POIController {
                             poi.put("vicinity", rs.getString("vicinity"));
                             poi.put("address", rs.getString("address"));
                             
-                            // Обрабатываем photo_url (который хранится как JSON массив)
-                            String photoUrlJson = rs.getString("photo_url");
-                            if (photoUrlJson != null) {
-                                try {
-                                    JSONArray photos = new JSONArray(photoUrlJson);
-                                    if (photos.length() > 0) {
-                                        poi.put("photoUrl", photos.getString(0)); // Берем первое фото
-                                        poi.put("photos", photos.toList()); // Все фото
-                                    }
-                                } catch (Exception e) {
-                                    System.err.println("Ошибка при разборе JSON с фото: " + e.getMessage());
-                                }
-                            }
-                            
                             results.add(poi);
                         }
                     }
@@ -171,20 +138,6 @@ public class POIController {
                             poi.put("longitude", rs.getDouble("longitude"));
                             poi.put("vicinity", rs.getString("vicinity"));
                             poi.put("address", rs.getString("address"));
-                            
-                            // Обрабатываем photo_url (который хранится как JSON массив)
-                            String photoUrlJson = rs.getString("photo_url");
-                            if (photoUrlJson != null) {
-                                try {
-                                    JSONArray photos = new JSONArray(photoUrlJson);
-                                    if (photos.length() > 0) {
-                                        poi.put("photoUrl", photos.getString(0)); // Берем первое фото
-                                        poi.put("photos", photos.toList()); // Все фото
-                                    }
-                                } catch (Exception e) {
-                                    System.err.println("Ошибка при разборе JSON с фото: " + e.getMessage());
-                                }
-                            }
                             
                             results.add(poi);
                         }
@@ -344,8 +297,7 @@ public class POIController {
     private List<Map<String, Object>> getPointsByType(Connection conn, String type, int limit) throws SQLException {
         List<Map<String, Object>> results = new ArrayList<>();
         
-        String sql = "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address, photo_url " +
-                     "FROM cultural_places WHERE type = ? ORDER BY rating DESC LIMIT ?";
+        String sql = "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address FROM cultural_places WHERE type = ? ORDER BY rating DESC LIMIT ?";
         
         try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
             pstmt.setString(1, type);
@@ -363,20 +315,6 @@ public class POIController {
                     poi.put("longitude", rs.getDouble("longitude"));
                     poi.put("vicinity", rs.getString("vicinity"));
                     poi.put("address", rs.getString("address"));
-                    
-                    // Обрабатываем photo_url (который хранится как JSON массив)
-                    String photoUrlJson = rs.getString("photo_url");
-                    if (photoUrlJson != null) {
-                        try {
-                            JSONArray photos = new JSONArray(photoUrlJson);
-                            if (photos.length() > 0) {
-                                poi.put("photoUrl", photos.getString(0)); // Берем первое фото
-                                poi.put("photos", photos.toList()); // Все фото
-                            }
-                        } catch (Exception e) {
-                            System.err.println("Ошибка при разборе JSON с фото: " + e.getMessage());
-                        }
-                    }
                     
                     results.add(poi);
                 }
@@ -400,8 +338,7 @@ public class POIController {
         
         // Строим SQL запрос с исключением уже выбранных точек
         StringBuilder sql = new StringBuilder(
-            "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address, photo_url " +
-            "FROM cultural_places WHERE 1=1");
+            "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address FROM cultural_places WHERE 1=1");
         
         if (!excludeIds.isEmpty()) {
             sql.append(" AND id NOT IN (");
@@ -437,20 +374,6 @@ public class POIController {
                     poi.put("longitude", rs.getDouble("longitude"));
                     poi.put("vicinity", rs.getString("vicinity"));
                     poi.put("address", rs.getString("address"));
-                    
-                    // Обрабатываем photo_url (который хранится как JSON массив)
-                    String photoUrlJson = rs.getString("photo_url");
-                    if (photoUrlJson != null) {
-                        try {
-                            JSONArray photos = new JSONArray(photoUrlJson);
-                            if (photos.length() > 0) {
-                                poi.put("photoUrl", photos.getString(0)); // Берем первое фото
-                                poi.put("photos", photos.toList()); // Все фото
-                            }
-                        } catch (Exception e) {
-                            System.err.println("Ошибка при разборе JSON с фото: " + e.getMessage());
-                        }
-                    }
                     
                     results.add(poi);
                 }

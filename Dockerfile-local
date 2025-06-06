@@ -1,0 +1,45 @@
+# Dockerfile для MapMaker с локальным GraphHopper
+FROM eclipse-temurin:17-jdk AS build
+
+# Устанавливаем Maven
+RUN apt-get update && apt-get install -y maven
+
+WORKDIR /app
+
+# Копируем файлы проекта
+COPY pom.xml .
+COPY src ./src
+
+# Собираем приложение
+RUN mvn clean package -DskipTests
+
+# Финальный образ
+FROM eclipse-temurin:17-jdk
+
+# Увеличиваем память для GraphHopper
+ENV JAVA_OPTS="-Xmx4g -Xms2g"
+
+WORKDIR /app
+
+# Копируем jar файл
+COPY --from=build /app/target/*.jar app.jar
+
+# Создаем директории для данных
+RUN mkdir -p /app/maps /app/data
+
+# Копируем скрипт загрузки карт
+COPY download-maps.sh .
+RUN chmod +x download-maps.sh
+
+# Копируем конфигурации
+COPY application-docker.properties ./application-docker.properties
+COPY config-docker.properties ./config-docker.properties
+
+# Объем для данных GraphHopper и карт
+VOLUME ["/app/data", "/app/maps"]
+
+# Порт приложения
+EXPOSE 8080
+
+# Запуск с увеличенной памятью
+CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar --spring.config.location=classpath:/application.properties,file:./application-docker.properties"] 

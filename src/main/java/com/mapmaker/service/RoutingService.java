@@ -20,7 +20,7 @@ public class RoutingService {
     private final RestTemplate restTemplate;
 
     // Ключ API GraphHopper
-    @Value("${graphhopper.api.key:219b0a47-70f9-4036-a2f0-14470b011033}")
+    @Value("${graphhopper.api.key:3ed70bc6-d2bc-4816-851f-a2ef0bb4c563}")
     private String apiKey;
 
     // Внедряем RestTemplate (добавьте @Bean в основной класс приложения или конфигурацию)
@@ -60,11 +60,32 @@ public class RoutingService {
                 return new JSONObject(response.getBody());
             } else {
                 System.err.println("Error from GraphHopper API: " + response.getStatusCode() + " " + response.getBody());
+                
+                // Если ошибка 429 - API лимит, возвращаем специальное сообщение
+                if (response.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+                    JSONObject errorResponse = new JSONObject();
+                    errorResponse.put("error", "rate_limit_exceeded");
+                    errorResponse.put("message", "API запросы превысили лимит. Попробуйте через несколько минут.");
+                    return errorResponse;
+                }
+                
                 return null;
             }
         } catch (Exception e) {
             System.err.println("Error calling GraphHopper API: " + e.getMessage());
+            System.err.println("Exception type: " + e.getClass().getName());
             e.printStackTrace();
+            
+            // Если это ошибка 429, обрабатываем её специально
+            if (e.getMessage() != null && (e.getMessage().contains("429") || 
+                e.getMessage().contains("Too Many Requests"))) {
+                System.err.println("Обнаружена ошибка 429 в сообщении: " + e.getMessage());
+                JSONObject errorResponse = new JSONObject();
+                errorResponse.put("error", "rate_limit_exceeded");
+                errorResponse.put("message", "API запросы превысили лимит. Попробуйте через несколько минут.");
+                return errorResponse;
+            }
+            
             return null;
         }
     }
@@ -103,6 +124,16 @@ public class RoutingService {
                 double[] end = points[i + 1];
 
                 System.out.println("Строим сегмент " + (i+1) + " маршрута: [" + start[0] + "," + start[1] + "] -> [" + end[0] + "," + end[1] + "]");
+
+                // Убираем задержку между запросами - проблема была в дублирующихся обработчиках
+                // if (i > 0) {
+                //     try {
+                //         Thread.sleep(2000); // Задержка 2 секунды между запросами
+                //         System.out.println("Задержка перед запросом сегмента " + (i+1));
+                //     } catch (InterruptedException e) {
+                //         Thread.currentThread().interrupt();
+                //     }
+                // }
 
                 UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(DIRECTIONS_API_URL)
                     .queryParam("point", start[0] + "," + start[1])
@@ -176,10 +207,33 @@ public class RoutingService {
                     } else {
                         System.err.println("Ошибка от GraphHopper API для сегмента " + (i+1) + ": " + 
                                           response.getStatusCode() + " " + response.getBody());
+                        
+                        // Если ошибка 429 - API лимит, прерываем построение и возвращаем ошибку
+                        if (response.getStatusCode() == HttpStatus.TOO_MANY_REQUESTS) {
+                            System.err.println("API лимит превышен на сегменте " + (i+1) + ", прерываем построение маршрута");
+                            JSONObject errorResponse = new JSONObject();
+                            errorResponse.put("error", "rate_limit_exceeded");
+                            errorResponse.put("message", "API запросы превысили лимит. Попробуйте через несколько минут.");
+                            return errorResponse;
+                        }
+                        
                         throw new RuntimeException("Ошибка API: " + response.getStatusCode() + " " + response.getBody());
                     }
                 } catch (Exception e) {
                     System.err.println("Ошибка при запросе к GraphHopper API для сегмента " + (i+1) + ": " + e.getMessage());
+                    System.err.println("Exception type: " + e.getClass().getName());
+                    
+                    // Если это ошибка 429, сразу возвращаем ошибку лимита
+                    if (e.getMessage() != null && (e.getMessage().contains("429") || 
+                        e.getMessage().contains("Too Many Requests"))) {
+                        System.err.println("Обнаружена ошибка 429 в сегменте " + (i+1) + ", сообщение: " + e.getMessage());
+                        System.err.println("API лимит превышен на сегменте " + (i+1) + ", прерываем построение маршрута");
+                        JSONObject errorResponse = new JSONObject();
+                        errorResponse.put("error", "rate_limit_exceeded");
+                        errorResponse.put("message", "API запросы превысили лимит. Попробуйте через несколько минут.");
+                        return errorResponse;
+                    }
+                    
                     throw e; // Пробрасываем ошибку дальше для общей обработки
                 }
             }
@@ -202,7 +256,19 @@ public class RoutingService {
             }
         } catch (Exception e) {
             System.err.println("Ошибка при построении тематического маршрута: " + e.getMessage());
+            System.err.println("Exception type: " + e.getClass().getName());
             e.printStackTrace();
+            
+            // Если это ошибка 429 - API лимит, возвращаем специальное сообщение
+            if (e.getMessage() != null && (e.getMessage().contains("429") || 
+                e.getMessage().contains("Too Many Requests"))) {
+                System.err.println("Обнаружена ошибка 429 в финальном catch, сообщение: " + e.getMessage());
+                JSONObject errorResponse = new JSONObject();
+                errorResponse.put("error", "rate_limit_exceeded");
+                errorResponse.put("message", "API запросы превысили лимит. Попробуйте через несколько минут.");
+                return errorResponse;
+            }
+            
             return null;
         }
     }

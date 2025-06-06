@@ -1,11 +1,13 @@
 package com.mapmaker.util;
 
+import org.springframework.stereotype.Component;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
 import java.sql.SQLException;
 import java.sql.ResultSet;
 
+@Component
 public class DatabaseHelper {
 
     public static void initializeDatabase() {

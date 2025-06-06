@@ -49,29 +49,8 @@ class RouteRenderer {
             });
         }
 
-        // Изменяем обработчик тематического маршрута
-        const thematicRouteButton = document.getElementById('thematic-route-button');
-        if (thematicRouteButton) {
-            thematicRouteButton.addEventListener('click', () => {
-                // Сбрасываем культурный маршрут перед построением тематического
-                window.hideAllRouteInfo();
-                
-                // Вызываем функцию построения тематического маршрута
-                if (window.thematicRouteBuilder) {
-                    window.thematicRouteBuilder.buildThematicRoute();
-                }
-            });
-        }
-        
-        // Кнопка перемешивания точек
-        const shufflePoiButton = document.getElementById('shuffle-poi-button');
-        if (shufflePoiButton) {
-            shufflePoiButton.addEventListener('click', () => {
-                if (window.thematicRouteBuilder) {
-                    window.thematicRouteBuilder.shufflePois();
-                }
-            });
-        }
+        // УДАЛЯЕМ ДУБЛИРУЮЩИЙСЯ ОБРАБОТЧИК ПЕРЕМЕШИВАНИЯ ТОЧЕК
+        // Обработчик уже есть в thematic-route-builder.js
     }
     
     // Отображение маршрута

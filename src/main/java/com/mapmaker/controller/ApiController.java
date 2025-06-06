@@ -34,6 +34,7 @@ import java.io.FileNotFoundException;
 import org.springframework.core.io.ClassPathResource;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import com.mapmaker.service.UnifiedRoutingService;
 
 @RestController
 @RequestMapping("/api")
@@ -42,13 +43,18 @@ public class ApiController {
     private final RoutingService routingService;
     private final PointOfInterestRepository poiRepository;
     private final OsmBoundaryExtractor osmBoundaryExtractor;
+    private final DatabaseHelper databaseHelper;
+    private final UnifiedRoutingService unifiedRoutingService;
 
     @Autowired
     public ApiController(RoutingService routingService, PointOfInterestRepository poiRepository, 
-                        OsmBoundaryExtractor osmBoundaryExtractor) {
+                        OsmBoundaryExtractor osmBoundaryExtractor, DatabaseHelper databaseHelper,
+                        UnifiedRoutingService unifiedRoutingService) {
         this.routingService = routingService;
         this.poiRepository = poiRepository;
         this.osmBoundaryExtractor = osmBoundaryExtractor;
+        this.databaseHelper = databaseHelper;
+        this.unifiedRoutingService = unifiedRoutingService;
     }
 
     @GetMapping("/route")
@@ -59,11 +65,15 @@ public class ApiController {
             @RequestParam double endLon,
             @RequestParam String profile) {
         
-        JSONObject routeResponse = routingService.getRoute(startLat, startLon, endLat, endLon, profile);
+        JSONObject routeResponse = unifiedRoutingService.getRoute(startLat, startLon, endLat, endLon, profile);
 
         if (routeResponse != null) {
+            // Проверяем, если это ошибка лимита API
+            if (routeResponse.has("error") && "rate_limit_exceeded".equals(routeResponse.getString("error"))) {
+                return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(routeResponse.toString());
+            }
             return ResponseEntity.ok(routeResponse.toString());
-            } else {
+        } else {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("{\"error\": \"Error calculating route\"}");
         }
     }
@@ -89,13 +99,17 @@ public class ApiController {
                 System.out.println("Точка " + (i+1) + ": [" + points[i][0] + ", " + points[i][1] + "]");
             }
             
-            JSONObject routeResponse = routingService.getThematicRoute(points, profile);
+            JSONObject routeResponse = unifiedRoutingService.getThematicRoute(points, profile);
             
             if (routeResponse != null) {
+                // Проверяем, если это ошибка лимита API
+                if (routeResponse.has("error") && "rate_limit_exceeded".equals(routeResponse.getString("error"))) {
+                    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(routeResponse.toString());
+                }
                 System.out.println("Успешно получен тематический маршрут");
                 return ResponseEntity.ok(routeResponse.toString());
             } else {
-                System.err.println("Ошибка: routingService.getThematicRoute вернул null");
+                System.err.println("Ошибка: unifiedRoutingService.getThematicRoute вернул null");
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                         .body("{\"error\": \"Error calculating thematic route\"}");
             }
@@ -138,7 +152,7 @@ public class ApiController {
         // Формируем SQL запрос с параметрами для IN клаузы
         StringBuilder sql = new StringBuilder(
             "SELECT id, name, type, rating, ST_X(location::geometry) as longitude, " +
-            "ST_Y(location::geometry) as latitude, place_id, vicinity, address, photo_url " +
+            "ST_Y(location::geometry) as latitude, place_id, vicinity, address " +
             "FROM points_of_interest WHERE type IN ("
         );
         
@@ -186,17 +200,6 @@ public class ApiController {
                         // Игнорируем ошибку, если колонки нет
                     }
                     
-                    try {
-                        String photoUrl = rs.getString("photo_url");
-                        if (photoUrl != null && !photoUrl.isEmpty()) {
-                            System.out.println("Получен photo_url для " + poi.getName() + ": " + photoUrl);
-                            poi.setPhotoUrl(photoUrl);
-                        }
-                    } catch (SQLException e) {
-                        // Игнорируем ошибку, если колонки нет
-                        System.err.println("Ошибка при получении photo_url: " + e.getMessage());
-                    }
-                    
                     result.add(poi);
                 }
             }
@@ -218,15 +221,6 @@ public class ApiController {
             System.out.println("Получено POI для тепловой карты: " + pois.size());
             
             // Проверка данных
-            if (pois.isEmpty()) {
-                System.err.println("Ошибка: нет данных для тепловой карты типа " + type);
-                Map<String, Object> errorResult = new HashMap<>();
-                errorResult.put("error", "No data available for heatmap");
-                errorResult.put("points", new ArrayList<>());
-                return ResponseEntity.ok(errorResult);
-            }
-            
-            // Проверяем данные
             boolean hasRating = false;
             double totalRating = 0;
             
@@ -364,11 +358,6 @@ public class ApiController {
                         point.put("address", poi.getVicinity());
                     }
                     
-                    // Добавляем URL фотографии, если есть
-                    if (poi.getPhotoUrl() != null && !poi.getPhotoUrl().isEmpty()) {
-                        point.put("photoUrl", poi.getPhotoUrl());
-                    }
-                    
                     points.add(point);
                 }
                 
@@ -449,4 +438,20 @@ public class ApiController {
         return stats;
     }
     */
+
+    /**
+     * Проверка статуса системы роутинга
+     */
+    @GetMapping("/routing/status")
+    public ResponseEntity<String> getRoutingStatus() {
+        try {
+            JSONObject status = unifiedRoutingService.getRoutingStatus();
+            return ResponseEntity.ok(status.toString());
+        } catch (Exception e) {
+            System.err.println("Ошибка получения статуса роутинга: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("{\"error\":\"Ошибка получения статуса роутинга\"}");
+        }
+    }
 } 

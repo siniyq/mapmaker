@@ -18,7 +18,6 @@ import java.util.Set;
 
 @Service
 public class GoogleMapsService {
-    private static final int MAX_PHOTO_WIDTH = 400; // Максимальная ширина фото
     private final GeoApiContext context;
     
     // Расширяем сетку точек для покрытия всего Витебска
@@ -236,18 +235,14 @@ public class GoogleMapsService {
             return;
         }
 
-        // Получаем URLs фотографий, если доступны (до 5 штук)
-        String photoUrl = getPhotoUrls(place);
-
         String sql = """
             INSERT INTO points_of_interest (
-                name, type, rating, place_id, latitude, longitude, vicinity, address, photo_url, location
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))
+                name, type, rating, place_id, latitude, longitude, vicinity, address, location
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326))
             ON CONFLICT (place_id) 
             DO UPDATE SET 
                 name = EXCLUDED.name,
                 rating = EXCLUDED.rating,
-                photo_url = EXCLUDED.photo_url,
                 vicinity = EXCLUDED.vicinity,
                 address = EXCLUDED.address,
                 location = ST_SetSRID(ST_MakePoint(?, ?), 4326)
@@ -266,88 +261,25 @@ public class GoogleMapsService {
             pstmt.setDouble(6, place.geometry.location.lng);
             pstmt.setString(7, place.vicinity);
             pstmt.setString(8, place.formattedAddress);
-            pstmt.setString(9, photoUrl);
             
             // Добавляем параметры для ST_MakePoint в INSERT
-            pstmt.setDouble(10, place.geometry.location.lng); // Долгота (X)
-            pstmt.setDouble(11, place.geometry.location.lat); // Широта (Y)
+            pstmt.setDouble(9, place.geometry.location.lng); // Долгота (X)
+            pstmt.setDouble(10, place.geometry.location.lat); // Широта (Y)
             
             // Добавляем параметры для ST_MakePoint в UPDATE
-            pstmt.setDouble(12, place.geometry.location.lng); // Долгота (X)
-            pstmt.setDouble(13, place.geometry.location.lat); // Широта (Y)
+            pstmt.setDouble(11, place.geometry.location.lng); // Долгота (X)
+            pstmt.setDouble(12, place.geometry.location.lat); // Широта (Y)
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
                     System.out.println("Успешно сохранено/обновлено место: " + place.name + 
-                                     " (ID: " + rs.getInt(1) + ")" + 
-                                     (photoUrl != null ? " с фотографией" : " без фотографии"));
+                                     " (ID: " + rs.getInt(1) + ")");
                 }
             }
         } catch (Exception e) {
             System.err.println("Ошибка при сохранении места " + place.name + ": " + e.getMessage());
             e.printStackTrace();
         }
-    }
-
-    /**
-     * Получает URL фотографий для места (до 5 штук)
-     * @param place объект с информацией о месте
-     * @return JSON массив с URL фотографий или null, если фотографий нет
-     */
-    private String getPhotoUrls(PlacesSearchResult place) {
-        if (place.photos == null || place.photos.length == 0) {
-            System.out.println("У места " + place.name + " нет фотографий");
-            return null;
-        }
-        
-        System.out.println("Получение фотографий для " + place.name + ": " + place.photos.length + " доступно");
-        
-        // Получаем API-ключ
-        String apiKey = "AIzaSyC8n6OCeLcGqrlUi2FSeUPlUirQA2DrflE"; // Жестко закодированный ключ, который мы знаем что работает
-        
-        // Создаем JSON массив для хранения URL фотографий
-        StringBuilder photoUrlsJson = new StringBuilder("[");
-        
-        // Максимальное количество фотографий, которые мы хотим получить
-        int maxPhotos = Math.min(5, place.photos.length);
-        System.out.println("Будет получено максимум " + maxPhotos + " фото");
-        
-        // Для каждой доступной фотографии (до maxPhotos)
-        for (int i = 0; i < maxPhotos; i++) {
-            Photo photo = place.photos[i];
-            
-            // Создаем URL для фотографии с помощью photo_reference
-            if (photo.photoReference != null && !photo.photoReference.isEmpty()) {
-                String photoUrl = String.format(
-                    "https://maps.googleapis.com/maps/api/place/photo?maxwidth=%d&photoreference=%s&key=%s",
-                    MAX_PHOTO_WIDTH,
-                    photo.photoReference,
-                    apiKey
-                );
-                
-                System.out.println("Создан URL для фото " + (i+1) + ": " + photoUrl);
-                
-                // Добавляем URL в JSON массив
-                if (i > 0) {
-                    photoUrlsJson.append(",");
-                }
-                photoUrlsJson.append("\"").append(photoUrl).append("\"");
-            } else {
-                System.out.println("Фото " + (i+1) + " не имеет действительной ссылки");
-            }
-        }
-        
-        photoUrlsJson.append("]");
-        String result = photoUrlsJson.toString();
-        
-        // Если нет фотографий с действительными ссылками, возвращаем null
-        if (result.equals("[]")) {
-            System.out.println("Не найдено ни одной действительной ссылки на фото");
-            return null;
-        }
-        
-        System.out.println("Финальный JSON массив фотографий: " + result);
-        return result;
     }
 
     private void clearOldData() {
