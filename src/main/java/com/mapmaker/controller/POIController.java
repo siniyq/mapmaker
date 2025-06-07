@@ -33,14 +33,14 @@ public class POIController {
                 "SELECT id, name, type, rating, place_id, latitude, longitude, vicinity, address FROM points_of_interest WHERE ");
             
             if (types != null && types.length() > 0) {
-                queryBuilder.append("type IN (");
-                for (int i = 0; i < typeArray.length; i++) {
-                    if (i > 0) {
-                        queryBuilder.append(", ");
-                    }
-                    queryBuilder.append("?");
+            queryBuilder.append("type IN (");
+            for (int i = 0; i < typeArray.length; i++) {
+                if (i > 0) {
+                    queryBuilder.append(", ");
                 }
-                queryBuilder.append(")");
+                queryBuilder.append("?");
+            }
+            queryBuilder.append(")");
                 
                 try (PreparedStatement pstmt = conn.prepareStatement(queryBuilder.toString())) {
                     for (int i = 0; i < typeArray.length; i++) {

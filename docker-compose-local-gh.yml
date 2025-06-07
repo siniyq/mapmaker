@@ -31,7 +31,6 @@ services:
       
       # API ключи (оставляем для fallback)
       - google.maps.api.key=${GOOGLE_MAPS_API_KEY:-AIzaSyBQwvM_w_zjXN6uPdanOsbrAsSKkcbNX9M}
-      - graphhopper.api.key=${GRAPHHOPPER_API_KEY:-3ed70bc6-d2bc-4816-851f-a2ef0bb4c563}
     
     volumes:
       # Том для кэша GraphHopper (важно для сохранения обработанных данных)

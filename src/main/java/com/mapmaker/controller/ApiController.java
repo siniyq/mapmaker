@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import com.mapmaker.service.RoutingService;
 import org.json.JSONObject;
 import org.json.JSONArray;
 import com.mapmaker.util.OsmBoundaryExtractor;
@@ -40,17 +39,15 @@ import com.mapmaker.service.UnifiedRoutingService;
 @RequestMapping("/api")
 public class ApiController {
 
-    private final RoutingService routingService;
     private final PointOfInterestRepository poiRepository;
     private final OsmBoundaryExtractor osmBoundaryExtractor;
     private final DatabaseHelper databaseHelper;
     private final UnifiedRoutingService unifiedRoutingService;
 
     @Autowired
-    public ApiController(RoutingService routingService, PointOfInterestRepository poiRepository, 
+    public ApiController(PointOfInterestRepository poiRepository, 
                         OsmBoundaryExtractor osmBoundaryExtractor, DatabaseHelper databaseHelper,
                         UnifiedRoutingService unifiedRoutingService) {
-        this.routingService = routingService;
         this.poiRepository = poiRepository;
         this.osmBoundaryExtractor = osmBoundaryExtractor;
         this.databaseHelper = databaseHelper;
@@ -73,7 +70,7 @@ public class ApiController {
                 return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(routeResponse.toString());
             }
             return ResponseEntity.ok(routeResponse.toString());
-        } else {
+            } else {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("{\"error\": \"Error calculating route\"}");
         }
     }

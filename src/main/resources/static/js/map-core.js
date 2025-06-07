@@ -62,6 +62,11 @@ class MapCore {
         window.infoDistance = document.getElementById('info-distance');
         window.infoTime = document.getElementById('info-time');
         window.routeDescription = document.getElementById('route-description');
+        
+        // Элементы простого маршрута А-Б
+        window.simpleInfoDistance = document.getElementById('simple-info-distance');
+        window.simpleInfoTime = document.getElementById('simple-info-time');
+        window.simpleRouteProfile = document.getElementById('simple-route-profile');
         window.profileButtons = document.getElementById('profile-buttons');
         window.resetButton = document.getElementById('reset-button');
         window.poiButtons = document.getElementById('poi-buttons');
@@ -392,6 +397,9 @@ class MapCore {
         
         const routeInfoPanel = document.getElementById('route-info-panel');
         if (routeInfoPanel) routeInfoPanel.style.display = 'none';
+        
+        const simpleRouteInfo = document.getElementById('simple-route-info');
+        if (simpleRouteInfo) simpleRouteInfo.style.display = 'none';
     }
     
     showThematicRouteInfo() {
@@ -410,6 +418,15 @@ class MapCore {
         // Показываем только культурный маршрут
         const routeInfoPanel = document.getElementById('route-info-panel');
         if (routeInfoPanel) routeInfoPanel.style.display = 'block';
+    }
+    
+    showSimpleRouteInfo() {
+        // Сначала скрываем все
+        this.hideAllRouteInfo();
+        
+        // Показываем только простой маршрут
+        const simpleRouteInfo = document.getElementById('simple-route-info');
+        if (simpleRouteInfo) simpleRouteInfo.style.display = 'block';
     }
     
     hideThematicRouteElements() {
@@ -524,7 +541,7 @@ class MapCore {
                 if (loadingElem) document.body.removeChild(loadingElem);
                 
                 if (window.routeRenderer) {
-                    window.routeRenderer.displayRoute(data);
+                    window.routeRenderer.displaySimpleRoute(data);
                 }
             })
             .catch(error => {
@@ -547,3 +564,4 @@ window.mapCore = mapCore;
 window.hideAllRouteInfo = () => mapCore.hideAllRouteInfo();
 window.showThematicRouteInfo = () => mapCore.showThematicRouteInfo();
 window.showCulturalRouteInfo = () => mapCore.showCulturalRouteInfo(); 
+window.showSimpleRouteInfo = () => mapCore.showSimpleRouteInfo(); 

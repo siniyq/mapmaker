@@ -196,12 +196,23 @@
     
         <!-- Блоки информации о маршрутах (под тепловой картой, сдвинуты ниже) -->
         <div id="route-info-container" style="position: absolute; right: 15px; top: 350px; z-index: 1000; width: 300px; pointer-events: none;">
+            <!-- Блок для простого маршрута А-Б -->
+            <div id="simple-route-info" style="display: none; padding: 10px; border-radius: 10px; background-color: rgba(var(--background-rgb), 1); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); margin-bottom: 15px; pointer-events: auto;">
+                <h3>Маршрут А → Б</h3>
+                <div class="neo-info-box">
+                    <p>Расстояние: <span id="simple-info-distance"></span> км</p>
+                    <p>Время: <span id="simple-info-time"></span> мин.</p>
+                    <p>Транспорт: <span id="simple-route-profile">Пешком</span></p>
+                </div>
+            </div>
+            
+            <!-- Блок для тематического маршрута -->
             <div id="route-info" style="display: none; padding: 10px; border-radius: 10px; background-color: rgba(var(--background-rgb), 1); box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light); margin-bottom: 15px; pointer-events: auto;">
-                <h3>Информация о маршруте</h3>
+                <h3>Тематический маршрут</h3>
                 <div class="neo-info-box">
                     <p>Расстояние: <span id="info-distance"></span> км</p>
                     <p>Время: <span id="info-time"></span> мин.</p>
-                    <p>Тип маршрута: <span id="route-type">Стандартный</span></p>
+                    <p>Тип маршрута: <span id="route-type">Тематический</span></p>
                     <button id="save-route" class="neo-button success">Сохранить маршрут</button>
                     <div id="route-description"></div>
                 </div>

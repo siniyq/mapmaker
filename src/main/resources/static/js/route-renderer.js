@@ -119,6 +119,72 @@ class RouteRenderer {
         }
     }
     
+    // Отображение простого маршрута А-Б (без POI)
+    displaySimpleRoute(routeData) {
+        console.log('Вызвана функция displaySimpleRoute для отображения простого маршрута А-Б');
+        
+        // Удаляем предыдущий маршрут, если он существует
+        if (window.routeLayer) {
+            window.map.removeLayer(window.routeLayer);
+            window.routeLayer = null;
+        }
+        
+        // Очищаем POI маркеры и скрываем информацию о тематических маршрутах
+        this.clearPoiMarkers();
+        window.hideAllRouteInfo();
+
+        if (routeData && routeData.paths && routeData.paths.length > 0) {
+            const path = routeData.paths[0];
+            const coordinates = path.points.coordinates;
+            const latLngs = coordinates.map(coord => [coord[1], coord[0]]);
+
+            // Создаем полилинию маршрута с цветом в зависимости от профиля
+            window.routeLayer = L.polyline(latLngs, { 
+                color: getRouteColor(window.currentProfile), 
+                weight: 4,
+                opacity: 0.8
+            }).addTo(window.map);
+            
+            console.log(`Создан слой простого маршрута с ${latLngs.length} точками`);
+                
+            // Создаем маркеры начала и конца маршрута только если они не существуют
+            if (!window.startMarker) {
+                window.startMarker = L.marker(latLngs[0], {
+                    icon: L.divIcon({className: 'route-marker-start', html: 'A', iconSize: [24, 24], iconAnchor: [12, 24]})
+                }).addTo(window.map);
+            }
+            
+            if (!window.endMarker) {
+                window.endMarker = L.marker(latLngs[latLngs.length - 1], {
+                    icon: L.divIcon({className: 'route-marker-end', html: 'B', iconSize: [24, 24], iconAnchor: [12, 24]})
+                }).addTo(window.map);
+            }
+
+            window.map.fitBounds(window.routeLayer.getBounds());
+
+            const distanceKm = (path.distance / 1000).toFixed(2);
+            const timeMin = Math.round(path.time / 1000 / 60);
+            
+            // Обновляем информацию в блоке простого маршрута
+            if (window.simpleInfoDistance) window.simpleInfoDistance.textContent = distanceKm;
+            if (window.simpleInfoTime) window.simpleInfoTime.textContent = timeMin;
+            if (window.simpleRouteProfile) {
+                const profileText = window.currentProfile === 'foot' ? 'Пешком' : 
+                                   (window.currentProfile === 'bike' ? 'На велосипеде' : 'На автомобиле');
+                window.simpleRouteProfile.textContent = profileText;
+            }
+            
+            // Показываем блок информации о простом маршруте
+            window.showSimpleRouteInfo();
+            
+            console.log(`Простой маршрут построен: ${distanceKm} км, ${timeMin} мин.`);
+
+        } else {
+            console.error("Ошибка: Не удалось получить данные маршрута или маршрут пуст.", routeData);
+            NeoDialog.alert("Ошибка", "Не удалось построить маршрут. Ответ API не содержит пути.");
+        }
+    }
+    
     addPoiMarkers(poiData) {
         poiData.forEach((poi, index) => {
             const marker = L.marker([poi.latitude, poi.longitude], {
@@ -178,6 +244,11 @@ class RouteRenderer {
         if (window.poiMarkers) {
             window.poiMarkers.forEach(marker => window.map.removeLayer(marker));
             window.poiMarkers = [];
+        }
+        
+        // Очищаем описание тематического маршрута
+        if (window.routeDescription) {
+            window.routeDescription.innerHTML = '';
         }
     }
     
