@@ -258,35 +258,6 @@ docker-compose -f docker-compose-external-db.yml exec mapmaker-app \
   java -jar /app/mapmaker-1.0-SNAPSHOT.jar forceUpdate
 ```
 
-## 🧪 Тестирование
-
-### Нагрузочное тестирование через DevTools
-```javascript
-// Откройте Developer Tools (F12) → Console и выполните:
-
-// Тест API производительности
-async function loadTest() {
-    const startTime = performance.now();
-    const promises = [];
-    
-    for(let i = 0; i < 50; i++) {
-        promises.push(fetch('/api/restaurants'));
-    }
-    
-    const results = await Promise.all(promises);
-    const endTime = performance.now();
-    
-    console.log(`50 запросов выполнено за ${endTime - startTime}ms`);
-    console.log(`Среднее время: ${(endTime - startTime) / 50}ms`);
-}
-
-loadTest();
-```
-
-### Unit тесты
-```bash
-mvn test
-```
 
 ## 🚀 Развертывание
 
@@ -326,30 +297,3 @@ docker-compose -f docker-compose-external-db.yml ps
 - ✅ **Reverse proxy** через Nginx
 - ✅ **Защищенные API endpoints**
 
-## 🔍 Troubleshooting
-
-### Проблемы с базой данных
-```bash
-# Проверка подключения к PostgreSQL
-docker-compose -f docker-compose-external-db.yml exec mapmaker-app \
-  psql -h host.docker.internal -U postgres -d mapmaker
-
-# Пересоздание схемы
-docker-compose -f docker-compose-external-db.yml restart mapmaker-app
-```
-
-### Проблемы с Docker
-```bash
-# Очистка Docker кеша
-docker system prune -f
-
-# Пересборка образов
-docker-compose -f docker-compose-external-db.yml build --no-cache
-```
-
-### Проблемы с API
-```bash
-# Проверка логов
-docker-compose -f docker-compose-external-db.yml logs mapmaker-app
-
-*Создавайте маршруты, исследуйте города, находите лучшие места!* 🗺️✨ 
